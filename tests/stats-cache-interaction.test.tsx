@@ -56,9 +56,12 @@ test("cache hit rate appears only inside expanded session stats, follows the ses
 		const entries = detail.querySelectorAll("li");
 		assert.equal(entries.length, 2);
 		assert.ok(entries[0] && entries[1]);
-		assert.match(entries[0].textContent!, /#1 · unpriced/);
+		assert.equal(entries[0].children.length, 4, "each turn has separate number, model, steps, and usage columns");
+		assert.equal(entries[0].children[0]?.textContent, "#1");
+		assert.equal(entries[0].children[1]?.textContent, "unpriced · unknown");
 		assert(!entries[0].textContent?.includes("Side question"), "legacy untagged entries are not classified");
-		assert.match(entries[1].textContent!, /#2 · Side question · unpriced/);
+		assert.equal(entries[1].children[0]?.textContent, "#2");
+		assert.equal(entries[1].children[1]?.textContent, "Side question · unpriced · unknown");
 		assert.match(entries[1].textContent!, /1 steps/);
 
 		for (const turns of [[], [turn(undefined, undefined)], [turn(0)], [turn(0, 900)]]) {

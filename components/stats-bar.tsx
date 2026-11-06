@@ -153,7 +153,7 @@ export function StatsBar({
 				{open && (
 					<div
 						data-testid="stats-detail"
-						className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl"
+						className="absolute bottom-full left-1/2 z-40 mb-1.5 w-[22rem] max-w-[calc(100vw-1.5rem)] -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl"
 					>
 						<div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 							Session stats
@@ -194,18 +194,17 @@ export function StatsBar({
 								<div className="mb-1 mt-2.5 border-t pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 									Turns
 								</div>
-								<ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+								<ul className="grid max-h-56 grid-cols-[max-content_minmax(0,1fr)_max-content_max-content] gap-x-2 gap-y-1 overflow-y-auto tabular-nums">
 									{turns.map((turn, i) => {
 										const c = pricing?.turnCosts[turn.id] ?? null;
 										return (
-											<li key={`${turn.messageId}-${i}`} className="flex items-center justify-between gap-2">
+											<li key={`${turn.messageId}-${i}`} className="col-span-4 grid grid-cols-subgrid items-center">
+												<span className="text-right text-muted-foreground">#{i + 1}</span>
 												<span className="truncate text-muted-foreground">
-													#{i + 1} · {turn.kind === "side-question" && "Side question · "}{prettyModel(turn.model, true)}
+													{turn.kind === "side-question" && "Side question · "}{prettyModel(turn.model, true)}
 												</span>
-												<span className="flex shrink-0 items-center gap-2 tabular-nums text-card-foreground">
-													<span className="text-muted-foreground">{turn.steps.length} steps</span>
-													<span>{turn.model.startsWith(`${CLAUDE_CODE_PROVIDER}:`) ? "CLI" : subscriptionLabel(turn.model) ?? (c === null ? "—" : formatUsd(c))}</span>
-												</span>
+												<span className="whitespace-nowrap text-right text-muted-foreground">{turn.steps.length} steps</span>
+												<span className="whitespace-nowrap text-left text-card-foreground">{turn.model.startsWith(`${CLAUDE_CODE_PROVIDER}:`) ? "CLI" : subscriptionLabel(turn.model) ?? (c === null ? "—" : formatUsd(c))}</span>
 											</li>
 										);
 									})}
