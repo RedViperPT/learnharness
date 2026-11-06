@@ -85,7 +85,7 @@ import { NativeSubscriptionBackgroundAccess } from "./subscription-connections";
  *  with the resolved default (owner: the hint ALWAYS names the default). */
 const SLOT_META: Record<ModelSlotName, { label: string; roster: string }> = {
 	strong: { label: "Strong", roster: "The main model for your sessions" },
-	cheap: { label: "Cheap", roster: "The assistants that research, build demos, and grade your work" },
+	cheap: { label: "Cheap", roster: "The assistants that research, build demos, grade work, and organize notes" },
 	vision: { label: "Vision", roster: "The assistants that draw and read PDFs" },
 };
 

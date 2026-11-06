@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { HistoryIcon, MessageCircleQuestionIcon, PlusIcon, SquareIcon, Trash2Icon, XIcon } from "lucide-react";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { BrailleSpinner } from "@/components/braille-spinner";
@@ -10,14 +10,8 @@ import type { SideChatMessage, SideChatQuote, SideChatThread } from "@/src/core"
 import { useSideChatSnapshot, useSideChatStore } from "./side-chat-state";
 import { navigateToSideQuote } from "./side-selection";
 import { SideQuoteContent } from "./side-quote-content";
-
-export const SIDE_PANEL_OVERLAY_THRESHOLD = 800;
-export function clampSideChatWidth(width: number, available: number): number {
-	return Math.max(320, Math.min(Math.round(width), Math.floor(available / 2)));
-}
-
-/** A renderer preference, not a persisted session setting. */
-let preferredWidth = 400;
+import { SessionSecondaryPanel } from "./session-secondary-panel";
+export { SIDE_PANEL_OVERLAY_THRESHOLD, clampSideChatWidth } from "./session-secondary-panel";
 const consumedFocus = new Map<string, number>();
 const EMPTY_DRAFT = { text: "", quotes: [] as SideChatQuote[] };
 
@@ -26,15 +20,12 @@ const EMPTY_DRAFT = { text: "", quotes: [] as SideChatQuote[] };
 export function SideChatPanel({ chatId, obscured = false }: { chatId: string; obscured?: boolean }) {
 	const store = useSideChatStore();
 	const state = useSideChatSnapshot();
-	const [width, setWidth] = useState(preferredWidth);
-	const [available, setAvailable] = useState(0);
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const cancelDeleteRef = useRef<HTMLButtonElement>(null);
 	const following = useRef(true);
-	const drag = useRef<{ x: number; width: number } | null>(null);
 	const active = state.activeKey;
 	const entry = active ? state.entries[active] : undefined;
 	const thread = entry?.thread;
@@ -46,22 +37,6 @@ export function SideChatPanel({ chatId, obscured = false }: { chatId: string; ob
 	const error = entry?.error || state.validationError;
 	const last = messages.at(-1);
 	const canRetry = !!thread && !busy && (last?.role === "user" || (last?.role === "assistant" && last.error !== undefined));
-	const overlay = available < SIDE_PANEL_OVERLAY_THRESHOLD;
-	const shownWidth = clampSideChatWidth(width, available);
-
-	useLayoutEffect(() => {
-		const shell = document.querySelector<HTMLElement>("[data-session-shell]");
-		if (!shell) return;
-		const measure = () => setAvailable(shell.getBoundingClientRect().width);
-		measure();
-		if (typeof ResizeObserver === "undefined") {
-			window.addEventListener("resize", measure);
-			return () => window.removeEventListener("resize", measure);
-		}
-		const observer = new ResizeObserver(measure);
-		observer.observe(shell);
-		return () => observer.disconnect();
-	}, [chatId]);
 
 	useEffect(() => {
 		if (!state.panelOpen || obscured || state.focusRevision === (consumedFocus.get(chatId) ?? 0)) return;
@@ -91,17 +66,6 @@ export function SideChatPanel({ chatId, obscured = false }: { chatId: string; ob
 		else if (historyOpen) setHistoryOpen(false);
 		else store?.setOpen(false);
 	};
-	useEffect(() => {
-		if (!state.panelOpen || obscured) return;
-		const onEscape = (event: globalThis.KeyboardEvent) => {
-			if (event.key !== "Escape" || event.defaultPrevented) return;
-			event.preventDefault();
-			event.stopPropagation();
-			dismissLayer();
-		};
-		document.addEventListener("keydown", onEscape);
-		return () => document.removeEventListener("keydown", onEscape);
-	}, [state.panelOpen, obscured, confirmDelete, historyOpen, store]);
 
 	if (!store || !state.panelOpen) return null;
 	const saveDraft = (value: typeof EMPTY_DRAFT) => {
@@ -112,69 +76,14 @@ export function SideChatPanel({ chatId, obscured = false }: { chatId: string; ob
 		following.current = true;
 		void store.ask(active, retry ? { retry: true } : undefined);
 	};
-	const changeWidth = (next: number) => {
-		preferredWidth = clampSideChatWidth(next, available);
-		setWidth(preferredWidth);
-	};
-	const ownKeys = (event: KeyboardEvent<HTMLElement>) => {
-		if (obscured) return;
-		// The main question dock also listens for arrows, Space, Tab and
-		// Enter at document/window level. None of the panel's native keys
-		// may select/submit a lesson answer or change its confidence.
-		if (!event.metaKey && !event.ctrlKey && !event.altKey) event.stopPropagation();
-		if (event.key === "Escape") {
-			event.preventDefault();
-			event.stopPropagation();
-			dismissLayer();
-		}
-	};
 	const navigate = (quote: SideChatQuote) => {
 		const found = navigateToSideQuote(quote);
-		if (found && overlay) store.setOpen(false);
+		if (found && document.getElementById(`side-chat-panel-${chatId}`)?.dataset.layout === "overlay") store.setOpen(false);
 		return found;
 	};
 
 	return (
-		<aside
-			id={`side-chat-panel-${chatId}`}
-			aria-label="Side questions"
-			data-testid="side-chat-panel"
-			data-layout={overlay ? "overlay" : "column"}
-			inert={obscured}
-			onKeyDown={ownKeys}
-			className={`flex min-h-0 shrink-0 flex-col border-l border-border bg-background ${overlay ? "absolute inset-0 z-30 w-full" : "relative"}`}
-			style={overlay ? undefined : { width: shownWidth }}
-		>
-			{!overlay && (
-				<div
-					role="separator"
-					aria-orientation="vertical"
-					aria-label="Resize side questions"
-					aria-controls={`side-chat-panel-${chatId}`}
-					aria-valuemin={320}
-					aria-valuemax={Math.floor(available / 2)}
-					aria-valuenow={shownWidth}
-					tabIndex={0}
-					className="absolute inset-y-0 -left-0.5 z-10 w-1 select-none touch-none cursor-col-resize hover:bg-muted-foreground/50 focus-visible:bg-muted-foreground"
-					onPointerDown={(event) => {
-						drag.current = { x: event.clientX, width: shownWidth };
-						event.currentTarget.setPointerCapture(event.pointerId);
-						event.preventDefault();
-					}}
-					onPointerMove={(event) => {
-						if (drag.current) changeWidth(drag.current.width + drag.current.x - event.clientX);
-					}}
-					onPointerUp={() => { drag.current = null; }}
-					onLostPointerCapture={() => { drag.current = null; }}
-					onKeyDown={(event) => {
-						if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-						event.preventDefault();
-						if (event.key === "Home") changeWidth(320);
-						else if (event.key === "End") changeWidth(available / 2);
-						else changeWidth(shownWidth + (event.key === "ArrowLeft" ? 24 : -24));
-					}}
-				/>
-			)}
+		<SessionSecondaryPanel chatId={chatId} id={`side-chat-panel-${chatId}`} label="Side questions" testId="side-chat-panel" obscured={obscured} onEscape={dismissLayer}>
 			<header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-3 font-ui">
 				<MessageCircleQuestionIcon className="size-4 shrink-0 text-muted-foreground" />
 				<strong className="min-w-0 flex-1 text-sm">Side questions</strong>
@@ -243,7 +152,7 @@ export function SideChatPanel({ chatId, obscured = false }: { chatId: string; ob
 						<Button size="sm" variant="destructive" disabled={isDraft && busy} onClick={() => { if (!active || (isDraft && busy)) return; setConfirmDelete(false); void store.remove(active); }}>{isDraft ? "Discard" : "Delete"}</Button></div>
 				</div> : <Button type="button" size="sm" variant="ghost" className="text-muted-foreground" disabled={isDraft && busy} onClick={() => setConfirmDelete(true)}><Trash2Icon className="size-3.5" />{isDraft ? "Discard draft" : "Delete conversation"}</Button>}
 			</div>}
-		</aside>
+		</SessionSecondaryPanel>
 	);
 }
 

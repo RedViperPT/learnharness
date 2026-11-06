@@ -285,6 +285,10 @@ test("old running results become finished pending work; old terminal records are
 
 test("fresh process restores a pending delivery on registration without a jobs poll", () => {
 	const owner = chat(true); const { job, steer } = pending(owner.id);
+	// A restart must not run a second writer against the still-live test
+	// process. Restore a copy of its durable snapshot, excluding its lease.
+	const restartedData = path.join(directory, "restarted-data");
+	fs.cpSync(process.env.LH_DATA_DIR!, restartedData, { recursive: true, filter: (source) => path.basename(source) !== ".writer" });
 	const script = `
 		const { stores } = await import('./src/server/stores.ts');
 		const { registerLiveAgent, noteSteersDurable, unregisterLiveAgent } = await import('./src/server/jobs.ts');
@@ -294,16 +298,16 @@ test("fresh process restores a pending delivery on registration without a jobs p
 		const record = stores.chatStore.getChat(${JSON.stringify(owner.id)});
 		stores.chatStore.saveMessages(record.id, [...record.messages, ...handed]);
 		noteSteersDurable(record.id, handed); unregisterLiveAgent(record.id); endTurn(record.id);
-		console.log(JSON.stringify(handed.map(marker => marker.id)));
+		console.log(JSON.stringify({ handed: handed.map(marker => marker.id),
+			delivery: stores.jobStore.getJob(${JSON.stringify(job.id)}).delivery.status,
+			copies: stores.chatStore.getChat(record.id).messages.filter(marker => marker.id === ${JSON.stringify(steer.id)}).length }));
 	`;
 	const child = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", script], {
 		cwd: process.cwd(), encoding: "utf8", timeout: 15000,
-		env: { PATH: process.env.PATH, HOME: path.join(directory, "home"), NODE_ENV: "test", LH_DATA_DIR: process.env.LH_DATA_DIR, LH_AUTH_FILE: process.env.LH_AUTH_FILE },
+		env: { PATH: process.env.PATH, HOME: path.join(directory, "home"), NODE_ENV: "test", LH_DATA_DIR: restartedData, LH_AUTH_FILE: process.env.LH_AUTH_FILE },
 	});
 	assert.equal(child.status, 0, child.stderr);
-	assert.deepEqual(JSON.parse(child.stdout.trim()), [steer.id]);
-	assert.equal(stores.jobStore.getJob(job.id)!.delivery?.status, "delivered");
-	assert.equal(stores.chatStore.getChat(owner.id)!.messages.filter((message) => message.id === steer.id).length, 1);
+	assert.deepEqual(JSON.parse(child.stdout.trim()), { handed: [steer.id], delivery: "delivered", copies: 1 });
 });
 
 test("deleting legacy completed work needs no preceding recovery poll", async () => {

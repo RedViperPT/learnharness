@@ -159,7 +159,7 @@ it("renders Ask alone without an active thread and both actions when a thread is
 	const labels = (active: boolean) => renderToStaticMarkup(
 		<SideSelectionActions active={active} onAction={() => {}} />,
 	);
-	assert.match(labels(false), />Ask</);
+	assert.match(labels(false), />Ask privately</);
 	assert.doesNotMatch(labels(false), /New question|Add to current thread/);
 	const active = labels(true);
 	assert.match(active, /New question/);
@@ -185,6 +185,15 @@ it("keeps rejected quotes available to the caller instead of treating refusal as
 	} as unknown as SideChatStore;
 	assert.equal(submitSideSelectionAction(store, "ask", quote), false);
 	assert.equal(opened, quote);
+});
+
+it("offers Add to notes beside private questions without changing active-thread actions", () => {
+	for (const active of [false, true]) {
+		const markup = renderToStaticMarkup(<SideSelectionActions active={active} onAction={() => {}} onAddToNotes={() => {}} />);
+		assert.match(markup, /Add to notes/);
+		assert.equal((markup.match(/<button/g) ?? []).length, active ? 3 : 2);
+		if (!active) assert(markup.indexOf("Ask privately") < markup.indexOf("Add to notes"));
+	}
 });
 
 it("dispatches New question and Add to current thread to their distinct store methods", () => {

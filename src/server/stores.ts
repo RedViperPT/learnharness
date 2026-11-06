@@ -13,6 +13,8 @@ import { jobStore } from "../store/jobs.ts";
 import { settingsStore } from "../store/settings.ts";
 import { resolveSettings, type EffectiveSettings } from "../core/settings-resolution.ts";
 import { syncCustomProvider } from "./custom-provider.ts";
+import { claimChatWriter } from "../store/chat-writer.ts";
+import { PATHS } from "../../config.ts";
 /** The wired adapters. Satisfies core/graph.ts's GraphDeps structurally. */
 export const stores = {
 	chatStore,
@@ -23,6 +25,11 @@ export const stores = {
 };
 
 export type Stores = typeof stores;
+
+/** Reserve writer intent before starting work whose usage must be persisted. */
+export function requireSessionWriter(): void {
+	claimChatWriter(PATHS.chats);
+}
 
 /**
  * The resolved view of the settings record (core/settings-resolution.ts):

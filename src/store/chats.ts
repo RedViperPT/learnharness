@@ -13,7 +13,9 @@ import { createHash } from "node:crypto";
 import { PATHS } from "../../config.ts";
 import { emit } from "../core/events.ts";
 import type { ChatStore } from "../core/ports.ts";
-import type { ChatRecord, ChatSettings, ChatSummary, ExtractionRunUsage, ImageSnapshot, PlanTree, TurnUsage, SideChatThread } from "../core/contracts.ts";
+import type { ChatRecord, ChatSettings, ChatSummary, ExtractionRunUsage, ImageSnapshot, PlanTree, TurnUsage, SideChatThread, SessionNotes, SessionNotesView } from "../core/contracts.ts";
+import { NOTES_MAX_BYTES, notesByteLength } from "../core/session-notes.ts";
+import { claimChatWriter } from "./chat-writer.ts";
 import { CURRENT_CHAT_VERSION } from "../core/contracts.ts";
 import type { LhMessage } from "../core/native-messages.ts";
 import { activeProblemOf, danglingQuestionOf } from "../core/native-messages.ts";
@@ -35,6 +37,7 @@ function chatFile(id: string): string {
  *  turn-settled, which the sidebar refetches on. Silence here is law,
  *  not oversight. */
 function createChat(title: string, kind?: "practice"): ChatRecord {
+	claimChatWriter(PATHS.chats);
 	const now = new Date().toISOString();
 	const record: ChatRecord = {
 		id: `chat_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`,
@@ -57,6 +60,7 @@ function createChat(title: string, kind?: "practice"): ChatRecord {
  *  lazy migration means existing files only get stamped on their next write.
  *  A future-version guard lives on the read side (getChat). */
 function writeChat(record: ChatRecord): void {
+	claimChatWriter(PATHS.chats);
 	writeFileAtomicSync(chatFile(record.id), JSON.stringify({ ...record, version: CURRENT_CHAT_VERSION }, null, "\t"), { allowInPlaceFallback: true });
 }
 
@@ -86,7 +90,7 @@ function listChats(): ChatSummary[] {
 			.filter((f) => f.endsWith(".json"))
 			.map((f) => getChat(f.slice(0, -5)))
 			.filter((r): r is ChatRecord => r !== null)
-			.map(({ messages, tree, turns, extractions, sideChats: _sideChats, imageSnapshots: _imageSnapshots, ...summary }) => {
+			.map(({ messages, tree, turns, extractions, sideChats: _sideChats, notes: _notes, imageSnapshots: _imageSnapshots, ...summary }) => {
 				// Per-record isolation (Wave B): a record whose messages fail the
 				// projection (e.g. pre-Wave-B UIMessage-format scratch — the
 				// zero-back-compat wipe makes these "corrupt") must not blank the
@@ -130,6 +134,7 @@ function listChats(): ChatSummary[] {
  *  Wave B: replay is state.messages = record.messages). SILENT by the
  *  events law — see the SILENCE LAW comment at createChat. */
 function saveMessages(id: string, messages: LhMessage[]): void {
+	claimChatWriter(PATHS.chats);
 	const record = getChat(id);
 	if (!record) throw new Error(`Chat not found: ${id}`);
 	record.messages = messages;
@@ -139,6 +144,7 @@ function saveMessages(id: string, messages: LhMessage[]): void {
 
 /** A synchronous read/merge/write keeps concurrent worker and turn writes from losing snapshots. */
 function saveImageSnapshot(id: string, snapshotId: string, image: ImageSnapshot): void {
+	claimChatWriter(PATHS.chats);
 	if (!/^[a-f0-9]{64}$/.test(snapshotId) || createHash("sha256").update(Buffer.from(image.data, "base64")).digest("hex") !== snapshotId) {
 		throw new Error("Invalid image snapshot identity");
 	}
@@ -156,6 +162,7 @@ function saveImageSnapshot(id: string, snapshotId: string, image: ImageSnapshot)
  * persist appends once, while continuation turns (which share a response
  *  message id) each keep their usage. */
 function appendTurnUsage(id: string, entry: TurnUsage): void {
+	claimChatWriter(PATHS.chats);
 	const record = getChat(id);
 	if (!record) throw new Error(`Chat not found: ${id}`);
 	record.turns = record.turns?.some((t) => t.id === entry.id)
@@ -164,7 +171,26 @@ function appendTurnUsage(id: string, entry: TurnUsage): void {
 	writeChat(record);
 }
 
+function readNotes(id: string): SessionNotesView | null {
+	const record = getChat(id);
+	return record ? record.notes ?? { markdown: "", revision: 0, updatedAt: null } : null;
+}
+
+function saveNotes(id: string, markdown: string, expectedRevision: number): SessionNotes | "conflict" | null {
+	claimChatWriter(PATHS.chats);
+	if (notesByteLength(markdown) > NOTES_MAX_BYTES) throw new Error("Notes exceed the 512 KiB limit.");
+	if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error("Invalid notes revision.");
+	const record = getChat(id);
+	if (!record) return null;
+	if ((record.notes?.revision ?? 0) !== expectedRevision) return "conflict";
+	const notes = { markdown, revision: expectedRevision + 1, updatedAt: new Date().toISOString() };
+	record.notes = notes;
+	writeChat(record);
+	return notes;
+}
+
 function updateSideChats(id: string, update: (threads: SideChatThread[]) => SideChatThread[]): SideChatThread[] | null {
+	claimChatWriter(PATHS.chats);
 	const record = getChat(id);
 	if (!record) return null;
 	const threads = update(record.sideChats ?? []);
@@ -178,6 +204,7 @@ function updateSideChats(id: string, update: (threads: SideChatThread[]) => Side
  * log — idempotent per startedAt: a retry that reaches the append twice
  * (abort replays) does not double-count spend. */
 function appendExtractionUsage(id: string, entry: ExtractionRunUsage): void {
+	claimChatWriter(PATHS.chats);
 	const record = getChat(id);
 	if (!record) throw new Error(`Chat not found: ${id}`);
 	record.extractions = record.extractions?.some((r) => r.startedAt === entry.startedAt)
@@ -189,6 +216,7 @@ function appendExtractionUsage(id: string, entry: ExtractionRunUsage): void {
 /** Persist the per-chat model/thinking settings — replace-whole (the
  * picker sends the complete object; absent = config defaults). */
 function saveSettings(id: string, settings: ChatSettings): void {
+	claimChatWriter(PATHS.chats);
 	const record = getChat(id);
 	if (!record) throw new Error(`Chat not found: ${id}`);
 	// Like saveTree: a settings tweak is not conversation activity, so it
@@ -203,6 +231,7 @@ function saveSettings(id: string, settings: ChatSettings): void {
  * string becomes "Untitled session" (the API gate rejects it first; this
  * is the honest floor for any other caller). */
 function renameChat(id: string, title: string): ChatRecord {
+	claimChatWriter(PATHS.chats);
 	const record = getChat(id);
 	if (!record) throw new Error(`Chat not found: ${id}`);
 	record.title = title.trim() || "Untitled session";
@@ -216,6 +245,7 @@ function renameChat(id: string, title: string): ChatRecord {
  *  into a 404. The record's graph traces and jobs are the route's
  *  choreography (core/graph-deletion.ts), not the store's. */
 function deleteChat(id: string): boolean {
+	claimChatWriter(PATHS.chats);
 	try {
 		fs.unlinkSync(chatFile(id));
 		removeLeftoverTemps(chatFile(id));
@@ -228,6 +258,7 @@ function deleteChat(id: string): boolean {
 
 /** Persist the session plan tree (plan tools call this in execute). */
 function saveTree(id: string, tree: PlanTree): void {
+	claimChatWriter(PATHS.chats);
 	const record = getChat(id);
 	if (!record) throw new Error(`Chat not found: ${id}`);
 	record.tree = tree;
@@ -239,6 +270,8 @@ function saveTree(id: string, tree: PlanTree): void {
 export const chatStore: ChatStore = {
 	createChat,
 	getChat,
+	readNotes,
+	saveNotes,
 	listChats,
 	saveMessages,
 	saveImageSnapshot,

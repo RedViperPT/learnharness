@@ -210,13 +210,14 @@ describe("sanitizeUserSettings", () => {
 		assert.deepEqual(out.agent?.tools, { quiz: false, demo: true });
 	});
 
-	it("BACKGROUND_MODEL_ROLES matches the five background roles (practice trio deleted 2026-10-04)", () => {
+	it("BACKGROUND_MODEL_ROLES includes the explicit note organizer role", () => {
 		assert.deepEqual([...BACKGROUND_MODEL_ROLES], [
 			"researcher",
 			"demoBuilder",
 			"visualMaker",
 			"extractor",
 			"auditor",
+			"noteOrganizer",
 		]);
 	});
 });

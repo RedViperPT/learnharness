@@ -33,6 +33,8 @@ Instead of just giving you an explanation, it uses your answers and thinking to 
 
 **Bring your files.** In the desktop app, attach PDFs, photos, or any other file with the paperclip, or drag them in. The file stays where it is: the message carries its path, and the agent reads it from there.
 
+**Keep your own notes.** Each teaching and practice session has a private Markdown workspace with math, code, tables, and diagrams. Writing and adding selected teacher text are model-free. **Organize** explicitly requests a source-bound AI rewrite; inspect the proposal, then Apply or Discard. [Notes and organization](docs/session-notes.md).
+
 The agent can also research questions in the background, create visual explanations, show your own images in the lesson and mark them up with arrows and labels, and build interactive demonstrations.
 
 ## Knowledge that carries forward

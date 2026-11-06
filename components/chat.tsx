@@ -89,6 +89,9 @@ import { ReadingThinkingField } from "@/components/reading-thinking";
 import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/thinking-block";
 import { SideChatProvider, useSideChatStore } from "@/components/side-chat-state";
 import { SideChatPanel } from "@/components/side-chat-panel";
+import { NotesProvider, useNotesStore } from "@/components/notes-state";
+import { NotesPanel } from "@/components/notes-panel";
+import { getSessionPanelStore } from "@/components/session-panel-state";
 import { SideSelectionAsk, SideSource } from "@/components/side-selection";
 import { SideContent } from "@/components/side-content";
 import { markdownSpan } from "@/src/core";
@@ -237,7 +240,9 @@ function savedSideSourceIds(messages: readonly LhMessage[]): ReadonlySet<string>
 export function Chat(props: React.ComponentProps<typeof ChatInner>) {
 	return (
 		<SideChatProvider chatId={props.chatId}>
+			<NotesProvider chatId={props.chatId}>
 			<ChatInner {...props} />
+			</NotesProvider>
 		</SideChatProvider>
 	);
 }
@@ -277,6 +282,7 @@ function ChatInner({
 	initialConfigured?: boolean;
 }) {
 	const sideChat = useSideChatStore();
+	const notes = useNotesStore();
 	// Reattach plumbing (background-turn runner wave): the hook holds the
 	// settled terminal's callback — a stable ref assigned below, once
 	// syncFromServer exists (refs, not closures: no stale capture).
@@ -414,7 +420,7 @@ function ChatInner({
 				mermaidFocus: mermaidFocusRef.current !== null || figureFocusRef.current !== null,
 				planOpen: planOpenRef.current,
 				setupOpen: setupOpenRef.current,
-				sidePanelOpen: sideChat?.getSnapshot().panelOpen,
+				sidePanelOpen: getSessionPanelStore(chatId).getSnapshot() !== null,
 				pending: pendingRef.current !== null,
 				problem: activeProblemRef.current !== null,
 				busy: busyRef.current,
@@ -424,7 +430,7 @@ function ChatInner({
 			else if (target === "turn") setAbortAsk("turn");
 			else if (target === "mermaid") setMermaidFocus(null);
 			else if (target === "plan") setPlanOpen(false);
-			else if (target === "side") sideChat?.setOpen(false);
+			else if (target === "side") { void notes?.flush(); getSessionPanelStore(chatId).set(null); }
 			// setup closes itself; null = nothing to do — both claimed.
 		};
 		window.addEventListener("lh:kbd-abort-turn", onAbort);
@@ -1243,6 +1249,9 @@ function ChatInner({
 		// must never be a reason to wake or replace the original lesson.
 		if (p.chatId === chatId) void syncTurns();
 	});
+	useServerEvent("notes-organizer-settled", (p) => {
+		if (p.chatId === chatId) void syncTurns();
+	});
 
 	const onSend = () => {
 		if (pending || compacting) return;
@@ -1426,6 +1435,7 @@ function ChatInner({
 					{kind !== "practice" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
 					<Button type="button" size="sm" variant="outline" data-testid="open-side-chat"
 						title="Ask a private side question" onClick={() => sideChat?.openNew()}>Ask</Button>
+					<Button type="button" size="sm" variant="outline" data-testid="open-notes" onClick={() => void notes?.open()}>Notes</Button>
 					{/* Practice sessions: no phase arc — a quiet Practice tag
 					    instead of the phase chip. */}
 					{kind === "practice" ? (
@@ -1841,6 +1851,7 @@ function ChatInner({
 				</div>
 			</div>
 			<SideChatPanel chatId={chatId} obscured={planOpen || mermaidFocus !== null || figureFocus !== null || setupOpen || abortAsk !== null} />
+			<NotesPanel chatId={chatId} obscured={planOpen || mermaidFocus !== null || figureFocus !== null || setupOpen || abortAsk !== null} />
 
 				{/* The session-scoped focuses (chrome-melt wave, 2026-09-19): mounted
 				    INSIDE the session area — absolute inset-0 siblings of the scroller,

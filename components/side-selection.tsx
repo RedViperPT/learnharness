@@ -10,6 +10,7 @@ import {
 	type RefObject,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { useNotesStore } from "./notes-state";
 import { useSideChatSnapshot, useSideChatStore, type SideChatStore } from "@/components/side-chat-state";
 import type { SideChatQuote, SideChatSource } from "@/src/core";
 import {
@@ -99,11 +100,13 @@ export function submitSideSelectionAction(
 export function SideSelectionActions({
 	active,
 	onAction,
+	onAddToNotes,
 }: {
 	active: boolean;
 	onAction: (action: SideSelectionAction) => void;
+	onAddToNotes?: () => void;
 }) {
-	return active ? (
+	return <>{active ? (
 		<>
 			<Button type="button" size="sm" variant="outline" onClick={() => onAction("new")}>
 				New question
@@ -114,13 +117,14 @@ export function SideSelectionActions({
 		</>
 	) : (
 		<Button type="button" size="sm" onClick={() => onAction("ask")}>
-			Ask
+			Ask privately
 		</Button>
-	);
+	)}{onAddToNotes && <Button type="button" size="sm" variant="outline" onClick={onAddToNotes}>Add to notes</Button>}</>;
 }
 
 export function SideSelectionAsk({ scopeRef }: { scopeRef: RefObject<HTMLElement | null> }) {
 	const store = useSideChatStore();
+	const notes = useNotesStore();
 	const snapshot = useSideChatSnapshot();
 	const [state, setState] = useState<ToolbarState | null>(null);
 	const stateRef = useRef<ToolbarState | null>(null);
@@ -241,7 +245,22 @@ export function SideSelectionAsk({ scopeRef }: { scopeRef: RefObject<HTMLElement
 			style={{ left: state.x, top: state.y }}
 			onPointerDown={(event) => event.preventDefault()}
 		>
-			<SideSelectionActions active={active} onAction={runAction} />
+			<SideSelectionActions active={active} onAction={runAction} onAddToNotes={notes ? () => {
+				const captured = state;
+				void notes.addQuote(captured.capture.quote).then((accepted) => {
+					if (accepted) {
+						// Async loading may let CodeMirror focus/select the insertion
+						// before this callback. Clear only the old lesson selection,
+						// never that newly focused note selection.
+						const selection = window.getSelection();
+						const anchor = selection?.anchorNode;
+						const element = anchor?.nodeType === 1 ? anchor as Element : anchor?.parentElement;
+						if (element?.closest(`[${SIDE_SOURCE_ATTRIBUTE}]`)) selection?.removeAllRanges();
+						setState(null);
+					}
+					else setState({ ...captured, error: notes.getSnapshot().error ?? "The quotation could not be added. Your selection has been kept." });
+				});
+			} : undefined} />
 			{state.error && <span role="status" className="basis-full px-2 py-1 text-xs text-destructive">{state.error}</span>}
 		</div>
 	);

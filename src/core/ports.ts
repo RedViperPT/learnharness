@@ -27,6 +27,8 @@ import type {
 	TurnUsage,
 	NotesSource,
 	SideChatThread,
+	SessionNotesView,
+	SessionNotes,
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
 
@@ -39,6 +41,9 @@ export interface ChatStore {
 	createChat(title: string, kind?: "practice"): ChatRecord;
 	/** The full record, or null if unknown id / corrupt file. */
 	getChat(id: string): ChatRecord | null;
+	readNotes(id: string): SessionNotesView | null;
+	/** Synchronous compare-and-set, silent and without changing lesson activity. */
+	saveNotes(id: string, markdown: string, expectedRevision: number): SessionNotes | "conflict" | null;
 	/** All sessions, newest activity first (the sidebar's list view). */
 	listChats(): ChatSummary[];
 	/** Persist the full native message list (the record IS the agent

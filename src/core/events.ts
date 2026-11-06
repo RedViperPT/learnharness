@@ -48,6 +48,8 @@ export interface ServerEvents {
 	"record-changed": { chatId: string };
 	/** A private side thread changed; clients refetch its dedicated endpoint. */
 	"side-chats-changed": { chatId: string };
+	/** Organizer spend changed, never note content or teacher-turn liveness. */
+	"notes-organizer-settled": { chatId: string };
 	/** A compaction started/finished for the chat (owner round 14,
 	 *  2026-10-05). running=true is the SEND GATE: while a compaction is
 	 *  in flight the server structurally refuses model interaction for
@@ -71,6 +73,7 @@ export const SERVER_EVENT_TYPES = [
 	"subscriptions-changed",
 	"record-changed",
 	"side-chats-changed",
+	"notes-organizer-settled",
 	"compaction-changed",
 ] as const satisfies readonly ServerEventType[];
 

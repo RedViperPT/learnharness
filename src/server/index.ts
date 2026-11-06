@@ -8,6 +8,7 @@ export * from "./chat-handler.ts";
 export * from "./events-stream.ts";
 export * from "./chats.ts";
 export { sideChats, createSideChatService } from "./side-chat.ts";
+export { noteOrganizer, createNoteOrganizerService } from "./note-organizer.ts";
 export * from "./graph.ts";
 export * from "./source-organization.ts";
 export * from "./source-deletion.ts";

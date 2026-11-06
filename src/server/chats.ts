@@ -9,6 +9,7 @@ import { isTurnRunning } from "./turn-liveness.ts";
 import { clearTurnFailure } from "./turn-runs.ts";
 import { discardChatDeliveries } from "./jobs.ts";
 import { sideChats } from "./side-chat.ts";
+import { noteOrganizer } from "./note-organizer.ts";
 import type { ChatRecord } from "../core/contracts.ts";
 
 /**
@@ -25,10 +26,10 @@ import type { ChatRecord } from "../core/contracts.ts";
 
 export const { createChat, listChats } = stores.chatStore;
 /** The ordinary chat API deliberately never returns private side-chat data. */
-export function getChat(id: string): Omit<ChatRecord, "sideChats"> | null {
+export function getChat(id: string): Omit<ChatRecord, "sideChats" | "notes"> | null {
 	const record = stores.chatStore.getChat(id);
 	if (!record) return null;
-	const { sideChats: _privateSideChats, ...publicRecord } = record;
+	const { sideChats: _privateSideChats, notes: _privateNotes, ...publicRecord } = record;
 	return publicRecord;
 }
 export { titleFromPrompt };
@@ -160,6 +161,7 @@ function finishChatRecordDeletion(chatId: string): number {
 	const jobsRemoved = stores.jobStore.deleteJobsForChat(chatId);
 	if (stores.chatStore.deleteChat(chatId)) {
 		sideChats.stopAll(chatId);
+		noteOrganizer.stopAll(chatId);
 		discardChatDeliveries(chatId);
 		clearTurnFailure(chatId);
 	}

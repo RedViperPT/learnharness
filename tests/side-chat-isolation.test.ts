@@ -43,10 +43,11 @@ function lessonConsumers(record: ChatRecord) {
 for (const kind of [undefined, "practice"] as const) {
 	test(`${kind ?? "teaching"}: side threads cannot change model requests, extraction, coverage, compaction, export, or context meter`, async () => {
 		const side = createFauxCore({});
+		const sideRequests: TranscriptContext[] = [];
 		side.setResponses([fauxAssistantMessage("PRIVATE-SIDE-ANSWER"), fauxAssistantMessage("PRIVATE-SIDE-FOLLOWUP-ANSWER")]);
 		const service = createSideChatService({
 			chatStore,
-			engineFor: async () => ({ model: side.getModel(), streamFn: side.streamSimple }),
+			engineFor: async () => ({ model: side.getModel(), streamFn: (model, context, options) => { sideRequests.push(structuredClone(context)); return side.streamSimple(model, context, options); } }),
 			instructions: () => "SIDE-ONLY-INSTRUCTIONS",
 		});
 		const chat = chatStore.createChat("Isolation fixture", kind);
@@ -56,6 +57,7 @@ for (const kind of [undefined, "practice"] as const) {
 		]);
 		const before = chatStore.getChat(chat.id)!;
 		const consumers = lessonConsumers(before);
+		chatStore.saveNotes(chat.id, "PRIVATE-NOTES: incomplete or incorrect learner shorthand", 0);
 		const first = await service.ask(chat.id, {
 			text: "PRIVATE-SIDE-QUESTION", quotes: [{ text: "A limit describes an approaching value.", source: { kind: "message", messageId: "msg_isolation_prose" } }],
 		});
@@ -73,6 +75,7 @@ for (const kind of [undefined, "practice"] as const) {
 		assert.equal(saved.turns!.length, 2, "both side calls remain in cost accounting");
 		assert.deepEqual(lessonConsumers(saved), consumers);
 		assert.doesNotMatch(JSON.stringify(lessonConsumers(saved)), /PRIVATE-|SIDE-ONLY-INSTRUCTIONS/);
+		assert.doesNotMatch(JSON.stringify(sideRequests), /PRIVATE-NOTES/);
 		assert.equal(Object.hasOwn(chatStore.listChats().find(item => item.id === chat.id)!, "sideChats"), false);
 
 		// Exercise actual native agent request construction for both session kinds,

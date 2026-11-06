@@ -1,4 +1,5 @@
 "use client";
+import { navigateAfterNotesSave } from "./notes-navigation";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -413,7 +414,7 @@ function SessionsSidebar() {
 	   message is sent (and that message becomes its title). Search: a
 	   client-side filter over the poll snapshot — no server round trip. */
 	const newSession = useCallback(() => {
-		router.push("/chat/new");
+		void navigateAfterNotesSave(() => router.push("/chat/new"));
 	}, [router]);
 
 	/* FUZZY (owner round 8, 2026-10-05): subsequence match ranked by
@@ -712,7 +713,7 @@ function SessionsSidebar() {
 					<button
 						type="button"
 						data-testid="new-session-practice"
-						onClick={() => router.push("/chat/new?mode=practice")}
+								onClick={() => { void navigateAfterNotesSave(() => router.push("/chat/new?mode=practice")); }}
 						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 					>
 						<DumbbellIcon className="size-3" />
@@ -768,7 +769,7 @@ function SessionsSidebar() {
 									const target = shown![kbdIndex !== null && kbdIndex < n ? kbdIndex : 0];
 									if (!target) return;
 									e.preventDefault();
-									router.push(`/chat/${target.id}`);
+									void navigateAfterNotesSave(() => router.push(`/chat/${target.id}`));
 									setKbdIndex(null);
 									e.currentTarget.blur();
 								}
@@ -832,7 +833,7 @@ function SessionsSidebar() {
 									kbdSelected={i === kbdIndex}
 									onOpen={() => {
 										setKbdIndex(null);
-										router.push(`/chat/${c.id}`);
+										void navigateAfterNotesSave(() => router.push(`/chat/${c.id}`));
 									}}
 									onContextMenu={(e) => openContext(e, c)}
 								/>

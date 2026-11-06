@@ -1,4 +1,5 @@
 "use client";
+import { navigateAfterNotesSave } from "./notes-navigation";
 
 /**
  * Keyboard shortcuts (shortcut wave A, 2026-09-17) — the single document-level
@@ -117,7 +118,7 @@ export function KeyboardShortcuts() {
 			// ride the window event for the mounted surface to catch.
 			switch (action) {
 				case "new-session":
-					handlersRef.current.router.push("/chat/new");
+					void navigateAfterNotesSave(() => handlersRef.current.router.push("/chat/new"));
 					break;
 				case "open-settings":
 					// Settings-app wave: the dialog is the surface, the URL is
@@ -125,7 +126,7 @@ export function KeyboardShortcuts() {
 					handlersRef.current.openSettings();
 					break;
 				case "jump-graph":
-					handlersRef.current.router.push("/");
+					void navigateAfterNotesSave(() => handlersRef.current.router.push("/"));
 					break;
 				case "cheat-sheet":
 					handlersRef.current.setCheatOpen(true);

@@ -66,6 +66,15 @@ export interface SideChatThread {
 	messages: SideChatMessage[];
 }
 
+export interface SessionNotes {
+	markdown: string;
+	revision: number;
+	updatedAt: string;
+}
+
+/** Empty, never-saved notes have no update timestamp. */
+export type SessionNotesView = Omit<SessionNotes, "updatedAt"> & { updatedAt: string | null };
+
 export interface ChatRecord {
 	id: string;
 	title: string;
@@ -74,6 +83,8 @@ export interface ChatRecord {
 	messages: LhMessage[];
 	/** Private learner-only side conversations, kept outside the lesson transcript. */
 	sideChats?: SideChatThread[];
+	/** Learner-owned document. Never projected into any agent's lesson context. */
+	notes?: SessionNotes;
 	/** Session-local processed pictures; artifact records carry references only. */
 	imageSnapshots?: Record<string, ImageSnapshot>;
 	/** The session's kind — absent = teach (pre-practice records). */
@@ -188,7 +199,7 @@ export interface TurnUsage {
 	id: string;
 	/** Explicit provenance for side spend, retained even when its thread is
 	 * deleted. Absent entries are unclassified, not necessarily teacher turns. */
-	kind?: "side-question";
+	kind?: "side-question" | "notes-organize";
 	/** The assistant message the turn produced — provenance, keys this
 	 *  entry to the transcript (the block this turn "belongs" to). */
 	messageId: string;

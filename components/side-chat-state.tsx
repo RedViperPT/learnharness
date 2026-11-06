@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import type { SideChatQuote, SideChatThread } from "@/src/core";
 import { useServerEvent, useServerResync } from "@/components/server-events";
+import { getSessionPanelStore } from "./session-panel-state";
 
 const QUESTION_MAX_CHARS = 8_000;
 const QUOTE_MAX_CHARS = 8_000;
@@ -124,6 +125,9 @@ export class SideChatStateStore implements SideChatStore {
 
 	constructor(chatId: string) {
 		this.chatId = chatId;
+		const panel = getSessionPanelStore(chatId);
+		this.snapshot = { ...emptySnapshot, panelOpen: panel.getSnapshot() === "side-chat" };
+		panel.subscribe(() => this.update({ panelOpen: panel.getSnapshot() === "side-chat" }));
 	}
 
 	getSnapshot = (): SideChatSnapshot => this.snapshot;
@@ -195,6 +199,7 @@ export class SideChatStateStore implements SideChatStore {
 	}
 
 	openNew(quote?: SideChatQuote): string {
+		getSessionPanelStore(this.chatId).set("side-chat");
 		const key = this.newDraftKey();
 		const draft: SideChatDraft = { text: "", quotes: quote ? [quote] : [] };
 		this.update({
@@ -224,7 +229,9 @@ export class SideChatStateStore implements SideChatStore {
 	}
 
 	setOpen(open: boolean): void {
-		this.update({ panelOpen: open });
+		const panel = getSessionPanelStore(this.chatId);
+		if (open) panel.set("side-chat");
+		else if (panel.getSnapshot() === "side-chat") panel.set(null);
 	}
 
 	setActive(key: string | null): void {
