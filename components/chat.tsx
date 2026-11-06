@@ -1641,7 +1641,8 @@ function ChatInner({
 													case "tool-probe":
 													case "tool-ask_user_question":
 													case "tool-explain":
-													case "tool-recall": {
+													case "tool-recall":
+													case "tool-offer_demo": {
 														const malformed = !busy && malformedQuestions.find(call => call.messageId === part.sourceMessageId && call.contentIndex === part.sourceContentIndex && call.toolCallId === part.toolCallId);
 														if (malformed) return <MalformedQuestion key={pi} disabled={!!pending || compacting}
 															reason={pending ? "Answer or discard the remaining question first." : undefined}
@@ -2460,7 +2461,7 @@ function DockOverlay({
 						>
 							{pending ? (
 								<QuestionDock
-									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall"}
+									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall" | "offer_demo"}
 									toolCallId={pending.toolCallId}
 									input={pending.input as never}
 									expanded={expanded}

@@ -24,6 +24,11 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 	const spans = new Map(answeredContent(savedAnswer, input).map(span => [span.id, span]));
 	const content = (id: string, className?: string) => <SideContent span={spans.get(id)!} className={className} />;
 	const [whyOpen, setWhyOpen] = useState(false); // the tucked explanation (predictions, owner 2026-10-03)
+	if (answer.tool === "offer_demo") return (
+		<div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground" data-testid="answered-demo-consent">
+			Interactive demo · <span className="font-medium">{answer.questionText}</span> · {answer.dismissed || answer.answers[0]?.value !== "build" ? "skipped" : "approved"}
+		</div>
+	);
 	if (answer.dismissed) {
 		return (
 			<div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">

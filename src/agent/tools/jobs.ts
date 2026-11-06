@@ -2,7 +2,9 @@ import { Type, type Static } from "typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { serverExecute } from "../tool-execute.ts";
 import type { JobRecord } from "../../core/contracts.ts";
-import type { JobStore } from "../../core/ports.ts";
+import type { ChatStore, JobStore } from "../../core/ports.ts";
+import type { DemoToolInput } from "../../core/contracts/jobs.ts";
+import { approvedDemoTitle } from "../../core/demo-consent.ts";
 import { checkLearnerImage } from "./learner-image.ts";
 import { resolveSourcePath } from "./fs-shared.ts";
 
@@ -21,6 +23,7 @@ export interface JobToolContext {
 	chatId: string;
 	/** Creates the job record (deduped by toolCallId). */
 	jobStore: JobStore;
+	chatStore: Pick<ChatStore, "getChat">;
 	/** Fire the background runner for a fresh job — fire-and-forget. The
 	 *  input rides along because the spawn happens MID-STREAM, before
 	 *  onFinish persists the tool part — a transcript scan would race it. */
@@ -43,7 +46,7 @@ export const researchInputSchema = Type.Object({
 });
 
 export const demoInputSchema = Type.Object({
-	title: Type.String({ description: "Short title for the demo card, e.g. 'Damped harmonic oscillator'." }),
+	consentCallId: Type.String({ minLength: 1, description: "Tool call id of the learner-approved, unused offer_demo." }),
 	brief: Type.String({
 		description:
 			"Precise brief for the builder: the concept, the parameters/controls and what each does, the interactions, and the visual style. " +
@@ -112,9 +115,8 @@ const RESEARCH_DESCRIPTION =
 	"as a new message and the lesson resumes from it. Cite the brief's sources when you use them. " +
 	"NEVER use it for things you know cold, internal reasoning, or math.";
 const DEMO_DESCRIPTION =
-	"Dispatch a background sub-agent that BUILDS and headlessly TESTS an interactive teaching instrument — a single-file HTML " +
-	"demo (parameter sweep, simulation, animation, sampling) rendered live in the lesson. Use it when the concept is DYNAMIC: " +
-	"something to sweep, animate, or sample is better experienced than described. " +
+	"Build the interactive demo previously approved by the learner. Requires the consentCallId of an approved, unused offer_demo. " +
+	"One approval authorizes one demo job only, including after failure. Write the detailed builder brief only after approval. " +
 	"The call is ASYNC and fire-and-forget — it resolves immediately and your turn continues; the tested demo arrives later " +
 	"as a new message. Write a precise brief: concept, controls, interactions, style.";
 const VISUAL_DESCRIPTION =
@@ -155,7 +157,17 @@ export function jobTools(ctx: JobToolContext): Record<string, AgentTool<any>> {
 			label: "demo",
 			description: DEMO_DESCRIPTION,
 			parameters: demoInputSchema,
-			execute: serverExecute("demo", demoInputSchema, (input, { toolCallId }) => dispatch(ctx, "demo", toolCallId, DEMO_ACK, input)),
+			executionMode: "sequential",
+			execute: serverExecute("demo", demoInputSchema, (input, { toolCallId, signal }) => {
+				signal?.throwIfAborted();
+				const title = approvedDemoTitle(ctx.chatStore.getChat(ctx.chatId)?.messages ?? [], input.consentCallId);
+				if (ctx.jobStore.listJobs(ctx.chatId).some(job => job.kind === "demo" && job.toolCallId !== toolCallId &&
+					(job.input as Partial<DemoToolInput> | undefined)?.consentCallId === input.consentCallId)) {
+					throw new Error("This demo approval has already been used. Ask again before building another demo.");
+				}
+				// No await between validation and durable admission: another call sees this job.
+				return dispatch(ctx, "demo", toolCallId, DEMO_ACK, { ...input, title });
+			}),
 		},
 		visual: {
 			name: "visual",
@@ -186,6 +198,7 @@ export function jobTools(ctx: JobToolContext): Record<string, AgentTool<any>> {
 }
 
 export type ResearchInput = Static<typeof researchInputSchema>;
-export type DemoInput = Static<typeof demoInputSchema>;
+/** Worker-facing shape remains compatible with durable pre-consent jobs. */
+export type DemoInput = DemoToolInput;
 export type VisualInput = Static<typeof visualInputSchema>;
 export type PdfInput = Static<typeof pdfInputSchema>;

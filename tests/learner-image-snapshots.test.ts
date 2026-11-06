@@ -166,7 +166,7 @@ describe("learner image source safety", () => {
 			process.env.HOME = home;
 			const tool = createShowImageTool({ chatId: "never-written", chatStore: { saveImageSnapshot: () => assert.fail("must not save denied image") } });
 			await assert.rejects(tool.execute("denied", { path: "alias/private.png" }), /Access denied/);
-			const tools = jobTools({ chatId: "x", jobStore: { findJobByToolCallId: () => undefined } as unknown as JobStore, spawn: () => assert.fail("must not spawn") });
+			const tools = jobTools({ chatId: "x", chatStore, jobStore: { findJobByToolCallId: () => undefined } as unknown as JobStore, spawn: () => assert.fail("must not spawn") });
 			await assert.rejects(tools.visual!.execute("denied", { brief: "mark it", image: "alias/private.png" }), /Access denied/);
 		} finally { if (old === undefined) delete process.env.HOME; else process.env.HOME = old; }
 	});
@@ -175,7 +175,7 @@ describe("learner image source safety", () => {
 		let job: JobRecord | undefined;
 		let spawned = 0;
 		const store = { findJobByToolCallId: () => job, createJob: (input: object) => job = { ...input, id: "job_same" } as JobRecord } as unknown as JobStore;
-		const tools = jobTools({ chatId: "x", jobStore: store, spawn: () => spawned++ });
+		const tools = jobTools({ chatId: "x", chatStore, jobStore: store, spawn: () => spawned++ });
 		const p = await file("idempotent.png", picture());
 		const a = await tools.visual!.execute("same", { brief: "mark it", image: p });
 		await fs.unlink(p);

@@ -2,7 +2,7 @@
  * THE ARTIFACT-UI ROUTE (owner, 2026-10-07): POST /api/chats/:id/artifact-ui
  * persists the learner's invert switch onto a demo/figure steer message
  * (details.ui.inverted) — the silent record-write route (no wake, no SSE).
- * The pure core (setSteerUiInverted) is pinned in tests/demos.test.tsx;
+ * The pure core (patchSteerUi) is pinned in tests/demos.test.tsx;
  * this file pins the ROUTE contract: 404 unknown chat, 400 for a bad body
  * or a non-artifact message id, and the record actually carrying the flag
  * after a write.
@@ -46,6 +46,28 @@ const post = (id: string, body: unknown) =>
 	});
 
 describe("POST /api/chats/:id/artifact-ui", () => {
+	it("persists collapse independently of inversion and rejects visual collapse and malformed patches", async () => {
+		const chat = createChat("Collapse round trip");
+		const demo = buildSubagentSteerFn({ id: "collapse", kind: "demo", toolCallId: "dc" },
+			{ title: "T", html: "<p>demo</p>", tested: true });
+		const visual = buildSubagentSteerFn({ id: "visual", kind: "visual", toolCallId: "vc" }, { svg: "<svg/>" });
+		saveMessages(chat.id, [demo, visual]);
+		const ui = () => (getChat(chat.id)!.messages[0] as { details: { ui: unknown } }).details.ui;
+		assert.equal((await post(chat.id, { input: { messageId: demo.id, inverted: true } })).status, 200);
+		assert.equal((await post(chat.id, { input: { messageId: demo.id, collapsed: true, unknown: "ignored" } })).status, 200);
+		assert.deepEqual(ui(), { inverted: true, collapsed: true });
+		assert.equal((await post(chat.id, { input: { messageId: demo.id, inverted: false } })).status, 200);
+		assert.deepEqual(ui(), { inverted: false, collapsed: true });
+		assert.equal((await post(chat.id, { input: { messageId: demo.id, collapsed: false } })).status, 200);
+		assert.deepEqual(ui(), { inverted: false, collapsed: false });
+		for (const input of [
+			{ messageId: visual.id, collapsed: true }, { messageId: "missing", collapsed: true },
+			{ messageId: demo.id }, { messageId: demo.id, unknown: true },
+			{ messageId: demo.id, collapsed: "yes" }, { messageId: demo.id, collapsed: null },
+			{ messageId: demo.id, collapsed: true, inverted: "bad" },
+		]) assert.equal((await post(chat.id, { input })).status, 400);
+		assert.deepEqual(ui(), { inverted: false, collapsed: false });
+	});
 	it("404s an unknown chat", async () => {
 		const res = await post("nope", { input: { messageId: "x", inverted: true } });
 		assert.equal(res.status, 404);

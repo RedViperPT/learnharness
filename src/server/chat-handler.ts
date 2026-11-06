@@ -484,6 +484,7 @@ export async function handleChatInput(
 						// the SAME settings gate as the prober's.
 						jobs: {
 							chatId,
+							chatStore: stores.chatStore,
 							jobStore: stores.jobStore,
 							spawn: (job, input) => void jobRunner.runJob(job.id, input),
 							searchAvailable,

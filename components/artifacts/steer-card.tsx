@@ -56,7 +56,7 @@ export function SubagentSteerCard({ message }: { message: LhViewMessage }) {
 				<PdfCompleteBadge result={data.result as PdfResult} />
 			);
 		case "demo":
-			return <DemoOutputCard output={data.result} messageId={message.id} initialInverted={data.ui?.inverted ?? false} />;
+			return <DemoOutputCard output={data.result} messageId={message.id} initialInverted={data.ui?.inverted ?? false} initialCollapsed={data.ui?.collapsed ?? false} />;
 		case "visual":
 			return <VisualOutputCard output={data.result} messageId={message.id} initialInverted={data.ui?.inverted ?? false} />;
 	}

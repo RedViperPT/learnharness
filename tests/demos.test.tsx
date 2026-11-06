@@ -54,9 +54,11 @@ import { runDemoBuilder } from "../src/agent/subagents/demo-builder.ts";
 import { headlessOverride, type DemoRunResult, type HeadlessApi } from "../src/agent/subagents/headless.ts";
 import { createJobRunner, demoModelOverride, visualModelOverride } from "../src/agent/subagents/runner.ts";
 import { runVisualMaker } from "../src/agent/subagents/visual-maker.ts";
-import { buildAbortSteer, buildSubagentSteer, isSubagentFailure, setSteerUiInverted, type SteerMessage } from "../src/core/contracts.ts";
+import { buildAbortSteer, buildSubagentSteer, isSubagentFailure, patchSteerUi, type SteerMessage } from "../src/core/contracts.ts";
 import type { JobRecord } from "../src/core/contracts.ts";
 import { createTeacherTools } from "../src/agent/tools.ts";
+import { buildAnswer, demoOfferQuestion } from "../src/core/question-core.ts";
+import { danglingQuestionOf } from "../src/core/native-messages.ts";
 import { chatStore } from "../src/store/chats.ts";
 import { jobStore } from "../src/store/jobs.ts";
 import { handleChatRequest } from "../src/server/chat-handler.ts";
@@ -569,7 +571,7 @@ describe("bridge height: the body-based measure (ratchet fix, 2026-10-07)", () =
 	});
 });
 
-describe("setSteerUiInverted (the persisted invert switch, 2026-10-07)", () => {
+describe("patchSteerUi (the persisted invert switch, 2026-10-07)", () => {
 	const demoSteer = buildSubagentSteer(
 		{ id: "jx", kind: "demo", toolCallId: "cx" },
 		{ title: "T", html: "<p>x</p>", tested: true },
@@ -577,7 +579,7 @@ describe("setSteerUiInverted (the persisted invert switch, 2026-10-07)", () => {
 	const other = { id: "other", role: "user" as const, content: "hi", timestamp: 1 };
 
 	it("writes ui.inverted on the target steer and leaves everything else untouched", () => {
-		const out = setSteerUiInverted([other, demoSteer], demoSteer.id, true);
+		const out = patchSteerUi([other, demoSteer], demoSteer.id, { inverted: true });
 		assert.equal(out.length, 2);
 		assert.deepEqual(
 			(out[1] as { details: { ui?: { inverted?: boolean } } }).details.ui,
@@ -587,10 +589,10 @@ describe("setSteerUiInverted (the persisted invert switch, 2026-10-07)", () => {
 	});
 
 	it("toggles back to false; missing or non-artifact messages are no-ops (same array members)", () => {
-		const on = setSteerUiInverted([demoSteer], demoSteer.id, true);
-		const off = setSteerUiInverted(on, demoSteer.id, false);
+		const on = patchSteerUi([demoSteer], demoSteer.id, { inverted: true });
+		const off = patchSteerUi(on, demoSteer.id, { inverted: false });
 		assert.equal((off[0] as { details: { ui?: { inverted?: boolean } } }).details.ui?.inverted, false);
-		const missing = setSteerUiInverted([demoSteer], "nope", true);
+		const missing = patchSteerUi([demoSteer], "nope", { inverted: true });
 		assert.equal(missing[0], demoSteer, "no target → identity");
 	});
 });
@@ -920,9 +922,24 @@ describe("demo/visual job runners", () => {
 		// conversation model — the per-chat pin, exactly like the setup flow.
 		chatStore.saveSettings(chat.id, { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } });
 
-		// A teacher that calls demo on turn 1, then continues in the SAME turn.
+		const offer = { title: DEMO_INPUT.title, description: "Vary the rate and observe growth." };
+		const offeringTeacher = scriptedModel([
+			{ toolCalls: [{ toolCallId: "approved-demo", toolName: "offer_demo", input: offer }] },
+		]);
+		const offered = await handleChatRequest(new Request("http://test/api/chat", {
+			method: "POST", headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ chatId: chat.id, input: { type: "text", text: "teach me compounding" } }),
+		}), opts => createTeacherAgent(undefined, { ...opts, engine: offeringTeacher,
+			tools: createTeacherTools({ chatId: chat.id, chatStore, jobStore, spawn: () => {} }) }));
+		assert.equal(offered.status, 200);
+		await drainRunning(chat.id);
+		const pending = danglingQuestionOf(chatStore.getChat(chat.id)!.messages)!;
+		assert.equal(pending.tool, "offer_demo", "offer is persisted as a real pending question");
+		assert.equal(jobStore.listJobs(chat.id).length, 0, "offering launches no builder");
+		const consentCallId = pending.toolCallId;
+		// The teacher consumes the approval, then continues in the SAME turn.
 		const teacher = scriptedModel([
-			{ toolCalls: [{ toolCallId: "call-d2", toolName: "demo", input: DEMO_INPUT }] },
+			{ toolCalls: [{ toolCallId: "call-d2", toolName: "demo", input: { consentCallId, brief: DEMO_INPUT.brief } }] },
 			{ text: "Here it is." },
 		]);
 
@@ -945,7 +962,8 @@ describe("demo/visual job runners", () => {
 						chatId: chat.id,
 						// Wave B: the input-events contract — one event,
 						// never a client transcript.
-						input: { type: "text", text: "teach me compounding" },
+						input: { type: "answer", toolCallId: consentCallId,
+							answer: buildAnswer(demoOfferQuestion(consentCallId, offer), { values: ["build"] }, "offer_demo") },
 					}),
 				}),
 				// The handler hands the factory the native build options
@@ -977,7 +995,7 @@ describe("demo/visual job runners", () => {
 			assert.equal(done.status, "done");
 
 			const saved = projectNative(chatStore.getChat(chat.id)!.messages);
-			const part = saved[1]!.parts.find((p) => p.type === "tool-demo");
+			const part = saved.flatMap(message => message.parts).find((p) => p.type === "tool-demo");
 			assert.ok(part && part.type === "tool-demo", "demo tool part persisted");
 			assert.equal(part.state, "output-available", "the part resolved with the ack at dispatch time");
 			assert.match(String((part as { output?: unknown }).output), /fire-and-forget/);
@@ -999,13 +1017,13 @@ describe("demo/visual job runners", () => {
 describe("tool + renderer registry wiring", () => {
 	it("demo and visual are SERVER-EXECUTED dispatch tools with the contract schemas", () => {
 		const { runner } = testRunner();
-		const tools = jobTools({ chatId: "chat_registry", jobStore, spawn: (job) => void runner.runJob(job.id) });
+		const tools = jobTools({ chatId: "chat_registry", chatStore, jobStore, spawn: (job) => void runner.runJob(job.id) });
 		assert.deepEqual(Object.keys(tools).sort(), ["demo", "pdf", "research", "visual"]);
 		for (const name of ["demo", "visual", "research", "pdf"] as const) {
 			assert.equal(typeof (tools[name] as { execute?: unknown }).execute, "function", `${name} executes server-side — fire-and-forget ack per THE ASYNC PROTOCOL`);
 		}
-		assert.equal(Value.Check(demoInputSchema, { title: "T", brief: "b" }), true);
-		assert.equal(Value.Check(demoInputSchema, { brief: "b" }), false, "demo requires a title");
+		assert.equal(Value.Check(demoInputSchema, { consentCallId: "approved", brief: "b" }), true);
+		assert.equal(Value.Check(demoInputSchema, { brief: "b" }), false, "demo requires consent");
 		assert.equal(Value.Check(visualInputSchema, { brief: "b" }), true);
 		assert.equal(Value.Check(visualInputSchema, {}), false, "visual requires a brief");
 		assert.equal(Value.Check(pdfInputSchema, { path: "/tmp/doc.pdf", question: "q" }), true);

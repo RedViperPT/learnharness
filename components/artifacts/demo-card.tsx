@@ -95,10 +95,12 @@ export function DemoOutputCard({
 	output,
 	messageId,
 	initialInverted = false,
+	initialCollapsed = false,
 }: {
 	output: unknown;
 	messageId?: string;
 	initialInverted?: boolean;
+	initialCollapsed?: boolean;
 }) {
 	const result = output as DemoResult | undefined;
 	if (!result || typeof result.html !== "string" || typeof result.title !== "string") {
@@ -121,7 +123,7 @@ export function DemoOutputCard({
 		);
 	}
 	return (
-		<DemoFrame title={result.title} html={result.html} messageId={messageId} initialInverted={initialInverted} />
+		<DemoFrame title={result.title} html={result.html} messageId={messageId} initialInverted={initialInverted} initialCollapsed={initialCollapsed} />
 	);
 }
 
@@ -130,11 +132,13 @@ function DemoFrame({
 	html,
 	messageId,
 	initialInverted = false,
+	initialCollapsed = false,
 }: {
 	title: string;
 	html: string;
 	messageId?: string;
 	initialInverted?: boolean;
+	initialCollapsed?: boolean;
 }) {
 	const actions = useContext(ChatActionsContext);
 	const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -147,6 +151,18 @@ function DemoFrame({
 	// page + content together while hue-rotate(180deg) undoes invert's hue
 	// flip.
 	const [inverted, setInverted] = useState(initialInverted);
+	const [collapsed, setCollapsed] = useState(initialCollapsed);
+	const toggleCollapsed = () => {
+		const next = !collapsed;
+		setCollapsed(next);
+		setState(INITIAL_DEMO_BRIDGE_STATE);
+		if (!actions?.chatId || !messageId) return;
+		void fetch(`/api/chats/${actions.chatId}/artifact-ui`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ input: { messageId, collapsed: next } }),
+		}).catch(() => {});
+	};
 	const toggleInverted = (next: boolean) => {
 		setInverted(next);
 		if (!actions?.chatId || !messageId) return;
@@ -170,7 +186,7 @@ function DemoFrame({
 	}, []);
 
 	return (
-		<div className="rounded-xl border bg-card p-4 text-card-foreground" data-testid="demo-card">
+		<div className={`rounded-xl border bg-card text-card-foreground ${collapsed ? "px-4 py-2" : "p-4"}`} data-testid="demo-card">
 			{/* Caption header (owner, 2026-10-07): kind label + title in the
 			   label's size/tracking (title normal-case, foreground) — the
 			   figure card's grammar plus a name. Switch + download far right. */}
@@ -182,6 +198,11 @@ function DemoFrame({
 					<span className="truncate text-xs font-medium tracking-wide text-foreground">{title}</span>
 				</div>
 				<div className="flex shrink-0 items-center gap-1.5">
+					<button type="button" onClick={toggleCollapsed} aria-label={collapsed ? "Show demo" : "Hide demo"}
+						title={collapsed ? "Show demo" : "Hide demo"} aria-expanded={!collapsed}
+						className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+						{collapsed ? "Show" : "Hide"}
+					</button>
 					<Toggle
 						checked={inverted}
 						onChange={toggleInverted}
@@ -201,14 +222,14 @@ function DemoFrame({
 					</button>
 				</div>
 			</div>
-			{state.error && (
+			{!collapsed && state.error && (
 				<DemoErrorChip
 					title={title}
 					message={state.error}
 					onSend={actions ? () => actions.sendText(`The demo "${title}" threw an error: ${state.error}`) : undefined}
 				/>
 			)}
-			<iframe
+			{!collapsed && <iframe
 				ref={iframeRef}
 				title={title}
 				// allow-scripts ONLY — no allow-same-origin: the demo can run code
@@ -231,7 +252,7 @@ function DemoFrame({
 					filter: inverted ? "invert(1) hue-rotate(180deg)" : undefined,
 				}}
 				data-testid="demo-iframe"
-			/>
+			/>}
 		</div>
 	);
 }

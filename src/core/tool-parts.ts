@@ -28,6 +28,7 @@
  */
 
 import { Value } from "typebox/value";
+import { demoOfferInputSchema, type DemoOfferInput } from "./question-core.ts";
 import type { TSchema } from "typebox";
 import { quizDisplayInputSchema, askInputSchema, askOptionProblems, quizInputProblems, explainInputProblems, explainDisplayInputSchema, type AskToolInput, type QuizToolInput, type ExplainToolInput } from "./question-core.ts";
 import { healEncodedArguments } from "./argument-heal.ts";
@@ -115,11 +116,16 @@ export function parseExplainInput(input: unknown): ExplainToolInput | undefined 
 
 /** One display-validity decision for dock authority and recovery. Does not
  * mutate the recorded input or invent missing authoring fields. */
-export function parseQuestionInput(tool: string, input: unknown): QuizToolInput | AskToolInput | ExplainToolInput | undefined {
+export function parseDemoOfferInput(input: unknown): DemoOfferInput | undefined {
+	return boundaryParse<DemoOfferInput>(demoOfferInputSchema, healEncodedArguments(input, demoOfferInputSchema));
+}
+
+export function parseQuestionInput(tool: string, input: unknown): QuizToolInput | AskToolInput | ExplainToolInput | DemoOfferInput | undefined {
 	switch (tool) {
 		case "quiz": case "probe": return parseQuizInput(input);
 		case "explain": case "recall": return parseExplainInput(input);
 		case "ask_user_question": return parseAskInput(input);
+		case "offer_demo": return parseDemoOfferInput(input);
 		default: return undefined;
 	}
 }

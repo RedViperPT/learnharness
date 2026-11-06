@@ -199,6 +199,7 @@ export interface ResearchResult {
 }
 
 export interface DemoToolInput {
+	consentCallId?: string;
 	title: string;
 	/** Precise brief: concept, parameters/interactions, visual style. */
 	brief: string;
@@ -285,8 +286,8 @@ export interface SubagentResultMeta {
 export interface SubagentArtifactData {
 	kind: JobKind;
 	result: ResearchResult | DemoResult | VisualResult | PdfResult;
-	/** The learner's pinned UI state (invert switch) riding the record. */
-	ui?: { inverted?: boolean };
+	/** Learner UI preferences; collapse applies only to demos. Missing flags are false. */
+	ui?: { inverted?: boolean; collapsed?: boolean };
 }
 
 /** A result steer's marker details: the UI's meta + artifact in one
@@ -297,23 +298,25 @@ export interface SteerDetails extends SubagentResultMeta {
 	 *  invert switch's position, persisted so navigating away and back (or
 	 *  restarting) keeps it. A VIEW preference — never enters the teacher's
 	 *  context, never exports (the markdown engine reads `result` only). */
-	ui?: { inverted?: boolean };
+	ui?: { inverted?: boolean; collapsed?: boolean };
 }
 
-/** Set a steer message's ui.inverted (pure): returns a NEW message array
- *  with the target's details updated — no-op (same array) when the message
- *  is missing or not an invertible artifact steer. The silent route's
- *  whole body. */
-export function setSteerUiInverted(
-	messages: readonly LhMessage[],
-	messageId: string,
-	inverted: boolean,
-): LhMessage[] {
+export type ArtifactUiPatch = { inverted?: boolean; collapsed?: boolean };
+
+/** Whitelist fields and kinds at the pure boundary too, not only in the route. */
+export function patchSteerUi(messages: readonly LhMessage[], messageId: string, patch: ArtifactUiPatch): LhMessage[] {
 	return messages.map((m) => {
 		if (m.id !== messageId) return m;
+		if (patch.inverted === undefined && patch.collapsed === undefined) return m;
+		if (m.role !== "custom" || m.customType !== "subagent-steer") return m;
 		const d = (m as LhMarkerMessage).details as Partial<SteerDetails> | undefined;
 		if (!d || (d.kind !== "demo" && d.kind !== "visual")) return m;
-		return { ...m, details: { ...d, ui: { ...d.ui, inverted } } } as LhMessage;
+		if ((patch.inverted !== undefined && typeof patch.inverted !== "boolean") ||
+			(patch.collapsed !== undefined && (typeof patch.collapsed !== "boolean" || d.kind !== "demo"))) return m;
+		const ui = { ...d.ui };
+		if (typeof patch.inverted === "boolean") ui.inverted = patch.inverted;
+		if (typeof patch.collapsed === "boolean") ui.collapsed = patch.collapsed;
+		return { ...m, details: { ...d, ui } } as LhMessage;
 	});
 }
 
@@ -349,7 +352,7 @@ function steerText(kind: JobKind, result: ResearchResult | DemoResult | VisualRe
 		if (kind === "demo")
 			return `The demo "${(result as DemoResult).title}" could not be built: ${
 				(result as DemoResult).notes ?? "unknown reason"
-			}. Fall back to explaining in prose; if the brief was the problem, re-call demo with a tighter one.`;
+			}. Fall back to explaining in prose. Any retry requires a new offer_demo and explicit learner approval before another demo job.`;
 		if (kind === "pdf")
 			return `${(result as PdfResult).brief}\n\nContinue with what you can establish from the session and flag the gap to the learner.`;
 		return `The figure could not be made: ${(result as VisualResult).notes ?? "unknown reason"}. Fall back to prose or mermaid, or re-call visual with a tighter brief.`;
@@ -420,7 +423,7 @@ function abortText(kind: JobKind): string {
 	if (kind === "research")
 		return "Research aborted — the learner aborted the research job, so no brief is coming. Acknowledge it in one line and continue teaching without it (or offer to re-dispatch it).";
 	if (kind === "demo")
-		return "The demo job was aborted by the learner — no demo is coming. Acknowledge it in one line and teach the topic in prose instead (a re-dispatch is fine if the learner wants it).";
+		return "The demo job was aborted by the learner — no demo is coming. Acknowledge it in one line and teach the topic in prose instead. Any retry requires a new offer_demo and explicit learner approval.";
 	if (kind === "pdf")
 		return "The PDF reading job was aborted by the learner — no brief is coming. Acknowledge it in one line and continue without it (a re-dispatch is fine if the learner wants it).";
 	return "The figure job was aborted by the learner — no figure is coming. Acknowledge it in one line and teach without it (a re-dispatch is fine if the learner wants it).";

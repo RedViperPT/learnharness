@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DemoConsentDock } from "@/components/demo-consent-dock";
 import { finishDictation, isDictationActive, joinDictation, useDictationTarget } from "@/components/dictation";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
@@ -28,6 +29,7 @@ import {
 	toggleOther,
 	type AnswerRequest,
 	type AskToolInput,
+	type DemoOfferInput,
 	type DockSelection,
 	type ExplainToolInput,
 	type QuestionAnswerData,
@@ -64,9 +66,9 @@ import { questionContent } from "@/src/core";
  */
 
 export interface QuestionDockProps {
-	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall";
+	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall" | "offer_demo";
 	toolCallId: string;
-	input: QuizToolInput | AskToolInput | ExplainToolInput;
+	input: QuizToolInput | AskToolInput | ExplainToolInput | DemoOfferInput;
 	/** Collapse state, owned by the DockOverlay (it drives the shell's height morph). */
 	expanded: boolean;
 	/**
@@ -117,6 +119,10 @@ export function QuestionDock({
 	dictationClaim = true,
 	compactionRunning = false,
 }: QuestionDockProps) {
+	if (toolName === "offer_demo") return (
+		<DemoConsentDock input={input} toolCallId={toolCallId} expanded={expanded} onExpand={onExpand}
+			onSubmit={onSubmit} disabled={compactionRunning} />
+	);
 	// The probe-phase names (owner, 2026-10-09) canonicalize onto their
 	// teach twins for every dock concern — parse dispatch, labels, kinds:
 	// the probe quiz ("probe") is quiz-shaped, the probe free-recall
@@ -265,7 +271,7 @@ function QuestionDockForm({
 	onEscape,
 	dictationClaim = true,
 	compactionRunning = false,
-}: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal">) {
+}: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal" | "input"> & { input: QuizToolInput | AskToolInput | ExplainToolInput }) {
 	const kind = toolQuestionKind(toolName);
 	const spans = questionContent(input.question, input.details);
 

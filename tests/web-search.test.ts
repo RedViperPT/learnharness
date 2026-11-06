@@ -216,6 +216,7 @@ function fakeJobStore(): JobStore {
 function fakeCtx(available?: () => boolean) {
 	return {
 		chatId: "chat-drop-test",
+		chatStore: { getChat: () => null },
 		jobStore: fakeJobStore(),
 		spawn: () => {},
 		...(available ? { searchAvailable: available } : {}),

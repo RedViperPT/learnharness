@@ -277,7 +277,7 @@ describe("visual with an image: dispatch", () => {
 				return job;
 			},
 		} as unknown as JobStore;
-		const tools = jobTools({ chatId: "chat_x", jobStore: store, spawn: (_job, input) => spawned.push(input) });
+		const tools = jobTools({ chatId: "chat_x", chatStore, jobStore: store, spawn: (_job, input) => spawned.push(input) });
 		return { tools, created, spawned };
 	}
 

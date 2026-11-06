@@ -5,8 +5,9 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { Agent } from "@earendil-works/pi-agent-core";
 import { after, afterEach, test } from "node:test";
-import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai";
-import { toLlmMessages, type LhMessage } from "../src/core/native-messages.ts";
+import { createFauxCore, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { toLlmMessages, newAnswerResult, type LhMessage } from "../src/core/native-messages.ts";
+import { buildAnswer, demoOfferQuestion } from "../src/core/question-core.ts";
 import { buildSubagentSteer, type JobKind, type SteerMessage } from "../src/core/contracts.ts";
 
 // Install isolation before importing any storage/configuration composition.
@@ -74,18 +75,27 @@ after(() => fs.rmSync(directory, { recursive: true, force: true }));
 
 for (const [kind, input] of Object.entries({
 	research: { question: "Saved research question", context: "Saved context" },
-	demo: { title: "Fixture", brief: "Saved demo brief" },
+	demo: { consentCallId: "fixture-consent", brief: "Saved demo brief" },
 	visual: { brief: "Saved figure brief" },
 	pdf: { path: "fixture.pdf", question: "Saved PDF question" },
 })) test(`${kind}: dispatch saves input before spawn and does not overwrite it on repeated dispatch`, async () => {
 	const owner = chat();
+	if (kind === "demo") {
+		const offer = { title: "Fixture", description: "An interactive fixture." };
+		stores.chatStore.saveMessages(owner.id, [
+			{ ...fauxAssistantMessage([fauxToolCall("offer_demo", offer, { id: "fixture-consent" })], { stopReason: "toolUse" }), id: "fixture-offer" },
+			newAnswerResult("fixture-consent", "offer_demo", buildAnswer(demoOfferQuestion("fixture-consent", offer), { values: ["build"] }, "offer_demo")),
+		]);
+	}
 	let spawns = 0;
-	const tools = jobTools({ chatId: owner.id, jobStore: stores.jobStore, spawn: (job) => {
+	const tools = jobTools({ chatId: owner.id, chatStore: stores.chatStore, jobStore: stores.jobStore, spawn: (job) => {
 		spawns++;
-		assert.deepEqual(stores.jobStore.getJob(job.id)!.input, input);
+		assert.deepEqual(stores.jobStore.getJob(job.id)!.input, kind === "demo" ? { ...input, title: "Fixture" } : input);
 	} });
-	await tools[kind]!.execute!("fixture-dispatch", input);
-	await tools[kind]!.execute!("fixture-dispatch", input);
+	const ack = await tools[kind]!.execute!("fixture-dispatch", input);
+	const original = stores.jobStore.listJobs(owner.id);
+	assert.deepEqual(await tools[kind]!.execute!("fixture-dispatch", input), ack);
+	assert.deepEqual(stores.jobStore.listJobs(owner.id), original);
 	assert.equal(spawns, 1);
 	assert.equal(stores.jobStore.listJobs(owner.id)[0]!.kind, kind as JobKind);
 });

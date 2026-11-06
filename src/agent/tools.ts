@@ -3,6 +3,7 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { invalidInputResult, questionResult, serverExecute } from "./tool-execute.ts";
 import {
 	askInputSchema,
+	demoOfferInputSchema,
 	askOptionProblems,
 	explainInputBase,
 	explainInputObject,
@@ -93,6 +94,15 @@ export const askUserQuestionTool: AgentTool<typeof askInputSchema> = {
 		if (problems.length > 0) return invalidInputResult("ask_user_question", problems);
 		return questionResult();
 	},
+};
+
+export const offerDemoTool: AgentTool<typeof demoOfferInputSchema> = {
+	name: "offer_demo",
+	label: "offer_demo",
+	description: "Propose one interactive demo to the learner and pause for permission. Use only when interaction would materially improve understanding. This tool does not build anything and incurs no demo-builder job. If the learner approves, this tool call's id is the consentCallId that may authorize one demo call. Do not write the detailed builder brief before approval.",
+	parameters: demoOfferInputSchema,
+	executionMode: "sequential",
+	execute: async () => questionResult(),
 };
 
 // ─── the question tools ───────────────────────────────────────────────────────
@@ -296,6 +306,7 @@ export function createProberTools(
 	// (one builder, one gating semantic); the prober carries a SUBSET:
 	const jobs = jobTools({
 		chatId: ctx.chatId,
+		chatStore: ctx.chatStore,
 		jobStore: ctx.jobStore,
 		spawn: ctx.spawn,
 		searchAvailable: ctx.searchAvailable,
@@ -461,8 +472,9 @@ export function createTeacherTools(
 			// The learner-image display twin of read (issue #363): teacher
 			// only, always on — it shows the learner their own file.
 			show_image: createShowImageTool(ctx),
+			...(enabled?.demo === false ? {} : { offer_demo: offerDemoTool }),
 			...planTools(ctx),
-			...jobTools({ chatId: ctx.chatId, jobStore: ctx.jobStore, spawn: ctx.spawn, searchAvailable: ctx.searchAvailable }),
+			...jobTools({ chatId: ctx.chatId, chatStore: ctx.chatStore, jobStore: ctx.jobStore, spawn: ctx.spawn, searchAvailable: ctx.searchAvailable }),
 		},
 		withoutMechanics(enabled),
 		),

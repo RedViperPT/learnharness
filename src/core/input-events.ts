@@ -44,6 +44,8 @@ import {
 	pendingProblemDismissalOf,
 } from "./native-messages.ts";
 import { QUESTION_TOOLS, toolQuestionKind } from "./pending.ts";
+import { buildAnswer, demoOfferQuestion } from "./question-core.ts";
+import { parseDemoOfferInput } from "./tool-parts.ts";
 
 /** One client-originated input event (the POST body's `input`). */
 export type ChatInput =
@@ -222,6 +224,17 @@ export function inputAppends(
 			const pending = danglingQuestionOf(record.messages);
 			if (!pending || pending.toolCallId !== input.toolCallId) {
 				throw new ChatInputError("answer input targets no pending question call");
+			}
+			if (pending.tool === "offer_demo") {
+				const offer = parseDemoOfferInput(pending.input);
+				const answer = input.answer;
+				const value = answer.answers?.[0]?.value;
+				if (!offer || answer.kind !== "ask" || !Array.isArray(answer.answers) || answer.answers.length !== 1 ||
+					(value !== "build" && value !== "skip") || answer.dismissed || answer.dontKnow || answer.text || answer.other) {
+					throw new ChatInputError("demo consent requires exactly one build or skip decision");
+				}
+				return [newAnswerResult(input.toolCallId, pending.tool,
+					buildAnswer(demoOfferQuestion(input.toolCallId, offer), { values: [value] }, pending.tool))];
 			}
 			return [newAnswerResult(input.toolCallId, pending.tool, input.answer)];
 		}

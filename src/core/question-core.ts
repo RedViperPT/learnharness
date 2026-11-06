@@ -391,6 +391,21 @@ export const askInputSchema = Type.Object({
 // graded, but duplicate values break the dock's value keying) runs at the
 // call boundary in execute (askOptionProblems, above).
 
+export const demoOfferInputSchema = Type.Object({
+	title: Type.String({ minLength: 1, pattern: "\\S", description: "Short learner-facing name for the proposed demo." }),
+	description: Type.String({ minLength: 1, pattern: "\\S", description: "One or two sentences explaining the interaction and why it would help. Do not write the builder brief yet." }),
+});
+export type DemoOfferInput = Static<typeof demoOfferInputSchema>;
+export const DEMO_CONSENT_OPTIONS: QuizOption[] = [
+	{ label: "Build demo", value: "build" },
+	{ label: "Continue without demo", value: "skip" },
+];
+
+export function demoOfferQuestion(id: string, input: DemoOfferInput): QuestionData {
+	return { id, kind: "ask", question: input.title, context: input.description, mode: "single-select",
+		options: DEMO_CONSENT_OPTIONS.map(option => ({ ...option })), createdAt: new Date().toISOString() };
+}
+
 export type QuizToolInput = Static<typeof quizInputObject>;
 export type AskToolInput = Static<typeof askInputSchema>;
 export type ExplainToolInput = Static<typeof explainInputObject>;

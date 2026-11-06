@@ -252,7 +252,7 @@ describe("live policy and all learner-source surfaces", () => {
 			const input = kind === "pdf" ? { path: "StudyA/sample.pdf", question: "?" } : { image: "StudyA/image.png", brief: "mark" };
 			let spawned = 0;
 			let id = "";
-			const tools = jobTools({ chatId: chat.id, jobStore, spawn: (job) => { id = job.id; spawned++; } });
+			const tools = jobTools({ chatId: chat.id, chatStore, jobStore, spawn: (job) => { id = job.id; spawned++; } });
 			await tools[kind]!.execute!("queued-call", input);
 			assert.equal(spawned, 1);
 			assert.deepEqual(jobStore.getJob(id)?.input, input);

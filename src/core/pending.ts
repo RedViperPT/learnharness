@@ -56,6 +56,7 @@ export const QUESTION_TOOLS = [
 	"ask_user_question",
 	"explain",
 	"recall",
+	"offer_demo",
 ] as const;
 
 /** The tool→kind map (the dock's own fold, named once — the dismissal

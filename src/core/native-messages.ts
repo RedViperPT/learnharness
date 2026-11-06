@@ -213,10 +213,13 @@ export function newAnswerResult(
 		role: "toolResult",
 		toolCallId,
 		toolName,
-		content: [{ type: "text", text: JSON.stringify(compactAnswerForModel(answer as QuestionAnswerData)) }],
+		content: [{ type: "text", text: JSON.stringify(toolName === "offer_demo"
+			? { ...compactAnswerForModel(answer as QuestionAnswerData), consentCallId: toolCallId,
+				decision: (answer as QuestionAnswerData).dismissed ? "skip" : (answer as QuestionAnswerData).answers?.[0]?.value }
+			: compactAnswerForModel(answer as QuestionAnswerData)) }],
 		// 0.87.1 narrowed ToolResultMessage.details to JsonRepresentation —
 		// our payloads are JSON-safe answer structures, so the cast is honest.
-		details: answer as ToolResultMessage["details"],
+		details: (toolName === "offer_demo" ? { ...(answer as QuestionAnswerData), tool: toolName } : answer) as ToolResultMessage["details"],
 		isError: false,
 		timestamp: Date.now(),
 	};
