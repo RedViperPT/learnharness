@@ -32,14 +32,14 @@ test.after(() => {
 
 // ── chats: lazy stamp at the write choke point ──────────────────────────────
 
-test("chats: createChat stamps version 1 on disk", () => {
+test("chats: createChat stamps the current version 2 on disk", () => {
 	const r = chatStore.createChat("stamp test");
-	assert.equal(r.version, 1, "the in-memory twin is stamped");
+	assert.equal(r.version, 2, "the in-memory twin is stamped");
 	const onDisk = JSON.parse(fs.readFileSync(path.join(TMP_DATA, "chats", `${r.id}.json`), "utf8"));
-	assert.equal(onDisk.version, 1, "the record carries the stamp");
+	assert.equal(onDisk.version, 2, "the record carries the stamp");
 });
 
-test("chats: an UNSTAMPED legacy record reads fine (absence = v1) and is stamped by its next write", () => {
+test("chats: an UNSTAMPED legacy record reads fine and is stamped v2 by its next write", () => {
 	const id = "chat_legacy000_stamp0";
 	fs.mkdirSync(path.join(TMP_DATA, "chats"), { recursive: true });
 	fs.writeFileSync(
@@ -48,10 +48,23 @@ test("chats: an UNSTAMPED legacy record reads fine (absence = v1) and is stamped
 		"utf-8",
 	);
 	const r = chatStore.getChat(id);
-	assert.ok(r, "unstamped record reads (lazy v1)");
+	assert.ok(r, "unstamped legacy record reads");
 	chatStore.saveMessages(id, []);
 	const onDisk = JSON.parse(fs.readFileSync(path.join(TMP_DATA, "chats", `${id}.json`), "utf8"));
-	assert.equal(onDisk.version, 1, "the write choke point stamped it");
+	assert.equal(onDisk.version, 2, "the write choke point stamped it");
+});
+
+test("chats: records with private side chats carry v2 so v1 builds refuse them", () => {
+	const record = chatStore.createChat("side chat stamp test");
+	chatStore.updateSideChats(record.id, () => [{
+		id: "side_1",
+		createdAt: new Date().toISOString(),
+		messages: [{ id: "msg_1", role: "user", text: "private question", at: new Date().toISOString() }],
+	}]);
+	const onDisk = JSON.parse(fs.readFileSync(path.join(TMP_DATA, "chats", `${record.id}.json`), "utf8"));
+	assert.equal(onDisk.version, 2, "the private side-chat shape is stamped v2");
+	assert.equal(onDisk.sideChats[0].messages[0].text, "private question");
+	assert.ok(onDisk.version > 1, "a v1 reader's existing newer-version guard refuses this record");
 });
 
 test("chats: a NEWER-stamped record is refused honestly (the downgrade scenario)", () => {
@@ -109,7 +122,7 @@ test("render-settings: its write stamps the family sidecar too", () => {
 
 // ── the fixtures stay the legacy pin: golden data reads unstamped ───────────
 
-test("golden fixtures are deliberately the unstamped legacy shape (lazy v1 = current-valid)", () => {
+test("golden fixtures are deliberately the unstamped legacy shape (still current-valid)", () => {
 	const here = import.meta.dirname;
 	const teach = JSON.parse(fs.readFileSync(path.join(here, "fixtures", "golden-data", "chats", "chat_mv27rrra_feff23b6.json"), "utf8"));
 	assert.equal(teach.version, undefined, "fixture records pin the unstamped read path");
