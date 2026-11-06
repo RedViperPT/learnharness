@@ -3,8 +3,10 @@
  * stays in fs-shared; do NOT add a whole data/userData denial here. */
 import os from "node:os";
 import path from "node:path";
+import fs from "node:fs";
 import type { FileAccessPolicy } from "../agent/tools/file-access.ts";
 import { readFileAccessSettings } from "../store/settings.ts";
+import { PATHS } from "../../config.ts";
 
 export function expandFolder(folder: string, home: string = os.homedir()): string {
 	if (folder === "~") return home;
@@ -16,7 +18,9 @@ export function expandFolder(folder: string, home: string = os.homedir()): strin
 export function fileAccessPolicy(): FileAccessPolicy {
 	const result = readFileAccessSettings();
 	if (!result.ok) return { restricted: true, folders: [], error: result.error };
-	return { restricted: result.settings.restricted, folders: result.settings.folders.map((folder) => expandFolder(folder)) };
+	try { if (fs.lstatSync(PATHS.pdfExtracts).isSymbolicLink()) return { restricted: true, folders: [], error: "The PDF extraction folder must not be a symlink." }; }
+	catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+	return { restricted: result.settings.restricted, folders: [...result.settings.folders.map((folder) => expandFolder(folder)), PATHS.pdfExtracts] };
 }
 
 /** Safe UI diagnostic, no raw JSON/file contents. A corrupt record must

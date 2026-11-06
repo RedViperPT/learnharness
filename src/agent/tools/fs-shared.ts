@@ -2,7 +2,7 @@ import * as fsSync from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { AUTH_FILE } from "../../../config.ts";
+import { AUTH_FILE, PATHS } from "../../../config.ts";
 import { comparisonPath, guardSourcePath, isWithin, realSourcePath as realOrMissing, resolvePolicy, type ResolvedFileAccessPolicy } from "./file-access.ts";
 
 /**
@@ -158,7 +158,9 @@ function sourcePathCheck(home = os.homedir()): (absolute: string) => boolean {
 	const homeRoots = sensitiveHomeLocations(home).map(protectedRealPath);
 	const files = credentialFiles(AUTH_FILE).map(protectedRealPath);
 	const credentialDir = protectedRealPath(path.dirname(AUTH_FILE));
+	const staging = protectedRealPath(PATHS.pdfStaging);
 	return (absolute) => isSensitivePath(absolute, home) ||
+		isWithin(absolute, PATHS.pdfStaging) || isWithin(absolute, staging) ||
 		homeRoots.some((p) => isWithin(absolute, p, true)) ||
 		files.some((p) => isWithin(absolute, p)) || isCredentialTemp(absolute, credentialDir, path.basename(comparisonPath(AUTH_FILE)));
 }

@@ -165,8 +165,9 @@ describe("composer attach button", () => {
 		assert.deepEqual(Array.from(f.doc.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent), ["Files", "Folder"]);
 		await f.choice("Files");
 		assert.equal(f.pickerClicks, 1);
-		const paths = ["/course/week 3.pdf", "/photos/board.jpg"];
-		await f.pick([f.file("week 3.pdf", paths[0]), f.file("board.jpg", paths[1]), f.file("virtual.pdf")]);
+		// PDFs now stage a batch dialog; ordinary attachments remain synchronous.
+		const paths = ["/course/week 3.txt", "/photos/board.jpg"];
+		await f.pick([f.file("week 3.txt", paths[0]), f.file("board.jpg", paths[1]), f.file("virtual.pdf")]);
 		assert.equal(f.value, `read ${paths.map(quoteFilePath).join(" ")} this`);
 		assert.equal(f.byteReads, 0, "paths only — file contents are never read");
 	});

@@ -5,6 +5,7 @@ import { FileSymlinkIcon, XIcon } from "lucide-react";
 import { directoryReferencePath, quoteFilePath } from "@/src/core";
 import { appendToPrimaryInput } from "@/components/dictation";
 import { INSERT_FILE_PATHS_EVENT } from "@/components/path-input";
+import { AttachmentBatchHost, stagePdfAttachments } from "./attachment-batch";
 
 export const BROWSER_NOTICE = "Local file paths can only be attached in the desktop app. You can paste a full path instead.";
 
@@ -82,6 +83,10 @@ export function FilePathDropZone({ children, className }: { children: React.Reac
 					return;
 				}
 				const focused = document.activeElement?.closest<HTMLElement>("[data-file-path-input]");
+				if (stagePdfAttachments(paths, focused && event.currentTarget.contains(focused) ? focused : null)) {
+					setNotice(skipped ? "Some dropped items had no available file path." : "");
+					return;
+				}
 				if (focused && event.currentTarget.contains(focused)) {
 					focused.dispatchEvent(new CustomEvent(INSERT_FILE_PATHS_EVENT, { detail: paths }));
 				} else if (!appendToPrimaryInput(paths.map(quoteFilePath).join(" "))) {
@@ -92,6 +97,7 @@ export function FilePathDropZone({ children, className }: { children: React.Reac
 			}}
 		>
 			{children}
+			<AttachmentBatchHost />
 			{dragging && (
 				<div data-testid="file-path-drop-indicator" className="pointer-events-none absolute inset-2 z-50 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/85 p-6 text-center backdrop-blur-sm">
 					<div className="flex max-w-md flex-col items-center gap-3">

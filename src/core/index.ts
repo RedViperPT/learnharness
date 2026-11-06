@@ -92,3 +92,4 @@ export * from "./coverage.ts";
 export * from "./session-markdown.ts";
 export { answeredContent, questionContent, markdownSpan, plainSpan, presentationRemarkPlugins, presentationAlertMarker, type SideContentSpan } from "./presentation/side-content.ts";
 export * from "./session-notes.ts";
+export * from "./pdf-extraction.ts";

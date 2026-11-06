@@ -200,6 +200,7 @@ function log(line) {
 }
 
 function startServer(port) {
+	require("./pdf-staging.cjs").cleanPdfStaging(DATA_DIR());
 	return new Promise((resolve, reject) => {
 		const child = spawn(
 			process.execPath,

@@ -115,7 +115,7 @@ async function fixture({ desktop = true, claimed = true } = {}) {
 test("desktop drop inserts quoted paths at the focused editor caret instead of the dictation claimant", async () => {
 	const f = await fixture();
 	f.focusEditor(4);
-	const paths = ["/actual/course notes.pdf", "C:\\course\\chapter`one.pdf", "\\\\host\\share\\図.png"];
+	const paths = ["/actual/course notes.txt", "C:\\course\\chapter`one.txt", "\\\\host\\share\\図.png"];
 	const files = paths.map((path, index) => f.file(`display-name-${index}.pdf`, path));
 	const dropped = await f.event("drop", f.transfer(files));
 	assert.equal(dropped.defaultPrevented, true);
@@ -132,8 +132,8 @@ test("a successful drop clears an earlier failure without replacing it with a co
 	const f = await fixture();
 	await f.event("drop", f.transfer([f.file("virtual.pdf")]));
 	assert.match(f.status, /No local file paths were available/);
-	await f.event("drop", f.transfer([f.file("valid.pdf", "/existing/valid.pdf")]));
-	assert.deepEqual(f.appends, ["`/existing/valid.pdf`"]);
+	await f.event("drop", f.transfer([f.file("valid.txt", "/existing/valid.txt")]));
+	assert.deepEqual(f.appends, ["`/existing/valid.txt`"]);
 	assert.equal(f.doc.querySelector('[role="status"]'), null);
 	f.assertPathOnly();
 });
@@ -142,7 +142,7 @@ test("unfocused drop uses the dictation target registry, not the last focused ed
 	const f = await fixture();
 	f.focusEditor(4);
 	f.doc.querySelector<HTMLElement>('[data-testid="elsewhere"]')!.focus();
-	const paths = ["~/notes one.pdf", "/tmp/notes`final`"];
+	const paths = ["~/notes one.txt", "/tmp/notes`final`"];
 	await f.event("drop", f.transfer(paths.map((path) => f.file("not-a-physical-path.pdf", path))));
 	assert.deepEqual(f.appends, [paths.map(quoteFilePath).join(" ")]);
 	assert.equal(f.value, "readthis", "saved editor caret must not override current default target");
@@ -173,11 +173,11 @@ test("mixed files and directories retain one original path each in drop order; i
 	const f = await fixture();
 	const files = [
 		f.file("virtual.pdf"), f.file("bad.pdf", "relative.pdf"), f.file("broken.pdf", new Error("not backed")),
-		f.file("folder", "/directory"), f.file("valid.pdf", "/existing/valid.pdf"),
+		f.file("folder", "/directory"), f.file("valid.txt", "/existing/valid.txt"),
 		f.file("multiline.pdf", "/a\nb.pdf"), f.file("NUL.pdf", "/a\0b.pdf"), f.file("url.pdf", "file:///a.pdf"),
 	];
 	await f.event("drop", f.transfer(files, [3]));
-	assert.deepEqual(f.appends, ["`/directory/` `/existing/valid.pdf`"]);
+	assert.deepEqual(f.appends, ["`/directory/` `/existing/valid.txt`"]);
 	assert.equal(f.resolved.includes(files[3]!), true, "a directory resolves through the same OS backing-path bridge");
 	assert.match(f.status, /Some dropped items had no available file path/);
 	f.assertPathOnly();

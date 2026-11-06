@@ -211,6 +211,15 @@ export function appendToPrimaryInput(text: string): boolean {
 	return true;
 }
 
+/** Capture a default destination, never redirect an asynchronous attachment. */
+export function capturePrimaryInput() {
+	const target = questionTarget ?? composerTarget;
+	return target ? {
+		valid: () => (questionTarget ?? composerTarget) === target,
+		insert: (text: string) => target(text),
+	} : null;
+}
+
 /* The finisher registry: submit paths FAR from the hook's owner (the
  * pending question's dock) need finish() without a prop bridge. Same
  * module-level pattern as questionTarget — one window, one instance,

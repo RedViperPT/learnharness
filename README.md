@@ -33,6 +33,8 @@ Instead of just giving you an explanation, it uses your answers and thinking to 
 
 **Bring your files.** In the desktop app, attach PDFs, photos, or any other file with the paperclip, or drag them in. The file stays where it is: the message carries its path, and the agent reads it from there.
 
+For PDFs, choose **Whole PDF** or **Extract pages** before attaching. Preview pages, enter physical PDF positions such as `3–8, 12` (not printed page labels), and optionally name the extracted copy. Originals stay unchanged. Extracted PDFs are shared across sessions in the app data folder's `pdf-extracts` directory and remain until manually deleted; this dedicated directory is agent-readable even with folder restrictions. Cancel discards temporary extracts. Extraction supports files up to 100 MB and 2,000 pages. Extracted numbering starts at 1; citations are not automatically mapped back to the original.
+
 **Keep your own notes.** Each teaching and practice session has a private Markdown workspace with math, code, tables, and diagrams. Writing and adding selected teacher text are model-free. **Organize** explicitly requests a source-bound AI rewrite; inspect the proposal, then Apply or Discard. [Notes and organization](docs/session-notes.md).
 
 The agent can also research questions in the background, create visual explanations, show your own images in the lesson and mark them up with arrows and labels, and build interactive demonstrations.
