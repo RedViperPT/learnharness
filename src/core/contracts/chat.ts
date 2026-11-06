@@ -27,12 +27,53 @@ import type { EmissionStats } from "./graph.ts";
  *  practice agent, its two tools, no extraction, no graph writes. */
 export type ChatKind = "teach" | "practice";
 
+export type SideChatSource =
+	| { kind: "message"; messageId: string }
+	| { kind: "question"; toolCallId: string }
+	| { kind: "problem"; toolCallId: string };
+
+/** Captured DOM text is literal; only actual KaTeX nodes become math. */
+export type SideChatQuoteSegment =
+	| { kind: "text"; text: string }
+	| { kind: "math"; tex: string; display: boolean };
+
+export interface SideChatQuote {
+	text: string;
+	source: SideChatSource;
+	selector?: { start: number; end: number; prefix: string; suffix: string };
+	/** Projects exactly to text (math uses $/$$). Absent on legacy quotes, rendered literally. */
+	segments?: SideChatQuoteSegment[];
+}
+
+export interface SideChatMessage {
+	id: string;
+	role: "user" | "assistant";
+	text: string;
+	quotes?: SideChatQuote[];
+	/** Server-selected anchors and saved-history boundary; never client-authoritative. */
+	lessonContext?: { sources: SideChatSource[]; throughMessageId: string | null };
+	at: string;
+	model?: string;
+	stopped?: boolean;
+	error?: string;
+}
+
+export interface SideChatThread {
+	id: string;
+	/** Correlates first admission with its client entry, including lost POST responses. */
+	creationRequestId?: string;
+	createdAt: string;
+	messages: SideChatMessage[];
+}
+
 export interface ChatRecord {
 	id: string;
 	title: string;
 	createdAt: string;
 	updatedAt: string;
 	messages: LhMessage[];
+	/** Private learner-only side conversations, kept outside the lesson transcript. */
+	sideChats?: SideChatThread[];
 	/** Session-local processed pictures; artifact records carry references only. */
 	imageSnapshots?: Record<string, ImageSnapshot>;
 	/** The session's kind — absent = teach (pre-practice records). */
@@ -135,9 +176,9 @@ export interface CallUsage {
 	reasoningTokens: number | undefined;
 }
 
-/** One billing turn: one full invocation of the teacher (a client turn or a
- * wake turn — same handler, same log). A turn with tool calls spans several
- * agent steps, and each step bills separately. Capture lands at the persist
+/** One billing turn: a teacher invocation, side answer, or compaction call.
+ * A turn with tool calls spans several agent steps, each billed separately.
+ * Capture lands at the persist
  * seam (server); cost is INFERRED at read time from core/prices.ts. */
 export interface TurnUsage {
 	/** Unique per REQUEST (turn): one invocation of the handler — the
@@ -145,6 +186,9 @@ export interface TurnUsage {
 	 *  response message id (the SDK coalesces them); keying on messageId
 	 *  would swallow their usage. */
 	id: string;
+	/** Explicit provenance for side spend, retained even when its thread is
+	 * deleted. Absent entries are unclassified, not necessarily teacher turns. */
+	kind?: "side-question";
 	/** The assistant message the turn produced — provenance, keys this
 	 *  entry to the transcript (the block this turn "belongs" to). */
 	messageId: string;

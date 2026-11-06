@@ -50,6 +50,17 @@ test("cache hit rate appears only inside expanded session stats, follows the ses
 		assert.equal(cacheRow()?.textContent, "Cache hit rate81.8%", "session totals, not the last request or mean percentages");
 		assert.equal(summary().textContent, collapsedSummary);
 
+		await act(async () => render([turn(900), { ...turn(0), id: "side", messageId: "gone", kind: "side-question" }]));
+		assert.equal(cacheRow()?.textContent, "Cache hit rate81.8%", "side usage stays in the session-wide ratio");
+		assert.match(detail.textContent!, /Session-wide, including side questions\./);
+		const entries = detail.querySelectorAll("li");
+		assert.equal(entries.length, 2);
+		assert.ok(entries[0] && entries[1]);
+		assert.match(entries[0].textContent!, /#1 · unpriced/);
+		assert(!entries[0].textContent?.includes("Side question"), "legacy untagged entries are not classified");
+		assert.match(entries[1].textContent!, /#2 · Side question · unpriced/);
+		assert.match(entries[1].textContent!, /1 steps/);
+
 		for (const turns of [[], [turn(undefined, undefined)], [turn(0)], [turn(0, 900)]]) {
 			await act(async () => render(turns));
 			assert.equal(cacheRow(), null, "unknown, empty, all-zero and write-only records stay hidden even while expanded");

@@ -49,4 +49,13 @@ describe("escAbortTarget (the layered-Esc ruling)", () => {
 	it("stacking order among overlays: mermaid paints above plan (later in DOM)", () => {
 		assert.equal(escAbortTarget({ ...none, mermaidFocus: true, planOpen: true, pending: true }), "mermaid");
 	});
+
+	it("side questions close before a lesson question, practice problem, or teacher turn is aborted", () => {
+		for (const underlying of ["pending", "problem", "busy"] as const) {
+			assert.equal(escAbortTarget({ ...none, sidePanelOpen: true, [underlying]: true }), "side");
+		}
+		assert.equal(escAbortTarget({ ...none, sidePanelOpen: true, planOpen: true, pending: true }), "plan");
+		assert.equal(escAbortTarget({ ...none, sidePanelOpen: true, setupOpen: true, busy: true }), "setup");
+		assert.equal(escAbortTarget({ ...none, sidePanelOpen: true, abortAsk: true }), null);
+	});
 });

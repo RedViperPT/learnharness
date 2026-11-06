@@ -17,7 +17,7 @@
  * Artifact: one JSONL file per chat at
  *   data/debug/provider-events/<chatId>.jsonl
  * (data/ is disposable scratch — no retention system). Each line:
- *   {"t":<epoch ms>,"ctx":"teacher|prober|job:<role>","provider":…,"model":…,"event":<raw>}
+ *   {"t":<epoch ms>,"ctx":"teacher|prober|side|job:<role>","provider":…,"model":…,"event":<raw>}
  * plus {"note":…} run markers. A per-file byte cap (CAPPED at ~20 MB)
  * writes one truncation marker and stops — a runaway turn must not fill
  * the disk. Event payloads are adapter-owned; a non-serializable event

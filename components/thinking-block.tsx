@@ -5,6 +5,8 @@ import { ChevronDownIcon } from "lucide-react";
 import { blurAfterPointerClick } from "@/components/focus-hygiene";
 import { cn } from "@/lib/utils";
 import { PathText } from "@/components/file-path-chip";
+import { SideContent } from "@/components/side-content";
+import type { SideContentSpan } from "@/src/core";
 
 /** The unified user-thinking row (owner round, 2026-10-05): ONE visual
  *  language for every surface where the learner's own thinking renders —
@@ -73,6 +75,7 @@ export function ThinkingBlock({
 	dataCommit,
 	defaultOpen = false,
 	inCard = false,
+	contentSpan,
 }: {
 	label?: string;
 	text: string;
@@ -83,6 +86,7 @@ export function ThinkingBlock({
 	defaultOpen?: boolean;
 	/** On the card's own background: no band (the accent read too light). */
 	inCard?: boolean;
+	contentSpan?: SideContentSpan;
 }) {
 	const [open, setOpen] = useState(() => resolveUserThinkingOpen(defaultOpen));
 	// ⌘T: an explicit global set overrides every row (once set, rows re-sync).
@@ -128,7 +132,7 @@ export function ThinkingBlock({
 				<ChevronDownIcon className={cn("size-4 shrink-0 transition-transform", open ? "rotate-180" : "rotate-0")} />
 			</button>
 			{open && (
-				<span className="lh-prose mt-1.5 block whitespace-pre-wrap text-[15px] italic text-foreground/50"><PathText text={text} /></span>
+				<span className="lh-prose mt-1.5 block whitespace-pre-wrap text-[15px] italic text-foreground/50">{contentSpan ? <SideContent span={contentSpan} /> : <PathText text={text} />}</span>
 			)}
 		</div>
 	);

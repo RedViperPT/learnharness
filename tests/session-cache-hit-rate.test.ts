@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { sessionCacheHitRate } from "../src/core/prices.ts";
+import { sessionCacheHitRate, sessionCost } from "../src/core/prices.ts";
 import type { CallUsage, TurnUsage } from "../src/core/contracts.ts";
 
 const step = (over: Partial<CallUsage> = {}): CallUsage => ({
@@ -26,6 +26,16 @@ test("cache writes count once; output, reasoning and the one-hour subset do not 
 		cacheWriteTokens: 300, cacheWrite1hTokens: 200, outputTokens: 50_000, reasoningTokens: 40_000 })])];
 	assert.equal(sessionCacheHitRate({ turns }), 0.6);
 	assert.equal(sessionCacheHitRate({ turns: [turn([step({ inputTokens: 0, cacheReadTokens: 100 })])] }), 1);
+});
+
+test("tagged side questions stay in both total cost and session cache reuse", () => {
+	const teacher = { ...turn([step({ inputTokens: 100, cacheReadTokens: 900 })]), id: "teacher" };
+	const side: TurnUsage = { ...turn([step({ inputTokens: 1000 })]), id: "side", kind: "side-question" };
+	assert.equal(sessionCacheHitRate({ turns: [teacher, side] }), 0.45);
+	const pricing = sessionCost({ turns: [teacher, side] }, () => 1);
+	assert.equal(pricing.cost, 2);
+	assert.equal(pricing.turnCosts.side, 1);
+	assert.equal(pricing.unpriced, 0);
 });
 
 test("no recorded cache reads means hidden, not a fabricated zero-percent rate", () => {

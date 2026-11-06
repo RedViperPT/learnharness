@@ -18,7 +18,7 @@ Expanded Session stats shows **Cache hit rate** only after positive cache reads 
 sum(cache read) / sum(fresh input + cache read + cache write)
 ```
 
-Output is excluded; one-hour writes are a subset of writes and are not counted twice. Missing cache counts mean no recorded reuse, not proven misses. This describes observed usage, not cache warmth, future hits, savings, or retention duration. See [`sessionCacheHitRate`](../src/core/prices.ts).
+Output is excluded; one-hour writes are a subset of writes and are not counted twice. Missing cache counts mean no recorded reuse, not proven misses. The rate includes side questions as well as teacher and compaction calls. Resending lesson content does not imply a cache miss; recorded provider usage determines the ratio. This describes observed usage, not cache warmth, future hits, savings, or retention duration. See [`sessionCacheHitRate`](../src/core/prices.ts).
 
 ## Prompt-cache retention
 
@@ -49,6 +49,8 @@ The server uses Pi AI's catalog and public `calculateCost`; the browser receives
 | [Custom/local endpoints](custom-providers.md) | Tokens retained; unknown/unpriced costs, not $0. No rate editor. |
 
 Mixed sessions sum known API estimates and retain subscription/CLI labels. Unpriced turns remain unpriced, not free. Summarizer spending counts under the same rules but does not populate the conversation meter.
+
+New side-question usage entries are labelled **Side question** in the popup. Their tag and incurred spend survive thread deletion and retries. Older untagged entries remain unclassified rather than being guessed from messages that may no longer exist.
 
 Saved input counts are Pi-normalized **fresh input**, disjoint from cache buckets; do not subtract cached reads again. Old records missing a cache-write retention split, or tier-priced multi-call jobs missing per-call detail, stay unpriced where that detail could change the result. They are not reconstructed from aggregates. Flat-rate historical jobs can remain priceable with sufficient counts.
 

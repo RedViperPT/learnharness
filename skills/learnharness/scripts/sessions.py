@@ -131,6 +131,9 @@ def selected_record(record: dict[str, Any], *, include_agent_thinking: bool = Fa
     for key, value in record.items():
         if key == "messages":
             continue
+        if key == "sideChats":
+            _omit(omissions, key, "private side conversations are excluded from the learning record")
+            continue
         if key in ACCOUNTING and not include_operations:
             _omit(omissions, key, "operational metadata/accounting (use --include-operations)")
         else:

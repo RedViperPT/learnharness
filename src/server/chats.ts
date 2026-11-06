@@ -8,6 +8,8 @@ import { stores } from "./stores.ts";
 import { isTurnRunning } from "./turn-liveness.ts";
 import { clearTurnFailure } from "./turn-runs.ts";
 import { discardChatDeliveries } from "./jobs.ts";
+import { sideChats } from "./side-chat.ts";
+import type { ChatRecord } from "../core/contracts.ts";
 
 /**
  * Server-side chat entries for the transport layer (app/api/chats*,
@@ -21,7 +23,14 @@ import { discardChatDeliveries } from "./jobs.ts";
  * argument.
  */
 
-export const { createChat, getChat, listChats } = stores.chatStore;
+export const { createChat, listChats } = stores.chatStore;
+/** The ordinary chat API deliberately never returns private side-chat data. */
+export function getChat(id: string): Omit<ChatRecord, "sideChats"> | null {
+	const record = stores.chatStore.getChat(id);
+	if (!record) return null;
+	const { sideChats: _privateSideChats, ...publicRecord } = record;
+	return publicRecord;
+}
 export { titleFromPrompt };
 export type { ChatDeleteMode, ChatDeletionStats } from "../core/graph-deletion.ts";
 
@@ -150,6 +159,7 @@ function finishChatDeletion(chatId: string, mode: ChatDeleteMode): Extract<ChatD
 function finishChatRecordDeletion(chatId: string): number {
 	const jobsRemoved = stores.jobStore.deleteJobsForChat(chatId);
 	if (stores.chatStore.deleteChat(chatId)) {
+		sideChats.stopAll(chatId);
 		discardChatDeliveries(chatId);
 		clearTurnFailure(chatId);
 	}

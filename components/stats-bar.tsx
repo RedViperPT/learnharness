@@ -173,10 +173,13 @@ export function StatsBar({
 								<span className="tabular-nums text-card-foreground">{costLabel}</span>
 							</div>
 							{cacheHitRate !== null && (
-								<div data-testid="stats-cache-hit-rate" className="flex justify-between gap-2">
-									<span>Cache hit rate</span>
-									<span className="tabular-nums text-card-foreground">{(cacheHitRate * 100).toFixed(1)}%</span>
-								</div>
+								<>
+									<div data-testid="stats-cache-hit-rate" className="flex justify-between gap-2">
+										<span>Cache hit rate</span>
+										<span className="tabular-nums text-card-foreground">{(cacheHitRate * 100).toFixed(1)}%</span>
+									</div>
+									<p>Session-wide, including side questions.</p>
+								</>
 							)}
 							{providers.includes("ChatGPT") && <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer" className="underline underline-offset-2">Manage ChatGPT usage</a>}
 							{unpriced > 0 && (
@@ -197,7 +200,7 @@ export function StatsBar({
 										return (
 											<li key={`${turn.messageId}-${i}`} className="flex items-center justify-between gap-2">
 												<span className="truncate text-muted-foreground">
-													#{i + 1} · {prettyModel(turn.model, true)}
+													#{i + 1} · {turn.kind === "side-question" && "Side question · "}{prettyModel(turn.model, true)}
 												</span>
 												<span className="flex shrink-0 items-center gap-2 tabular-nums text-card-foreground">
 													<span className="text-muted-foreground">{turn.steps.length} steps</span>

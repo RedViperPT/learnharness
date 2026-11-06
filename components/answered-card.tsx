@@ -4,11 +4,10 @@ import { useState } from "react";
 import { ConfidenceRail } from "@/components/confidence-rail";
 import { GlyphMark } from "@/components/ui/glyph-mark";
 import { ThinkingBlock } from "@/components/thinking-block";
-import { PathText } from "@/components/file-path-chip";
+import { SideContent } from "@/components/side-content";
 import { cn } from "@/lib/utils";
-import { ToolContentResponse } from "@/components/ai-elements/message";
 import type { QuestionAnswerData } from "@/src/core";
-import { answerForPresentation, parseAskInput, parseQuizInput } from "@/src/core";
+import { answeredContent, answerForPresentation } from "@/src/core";
 
 /**
  * Static rendering of an answered question (tool part in `output-available`).
@@ -22,11 +21,13 @@ import { answerForPresentation, parseAskInput, parseQuizInput } from "@/src/core
  */
 export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionAnswerData; input?: unknown }) {
 	const answer = answerForPresentation(savedAnswer, input);
+	const spans = new Map(answeredContent(savedAnswer, input).map(span => [span.id, span]));
+	const content = (id: string, className?: string) => <SideContent span={spans.get(id)!} className={className} />;
 	const [whyOpen, setWhyOpen] = useState(false); // the tucked explanation (predictions, owner 2026-10-03)
 	if (answer.dismissed) {
 		return (
 			<div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-				<span className="font-medium">{answer.questionText}</span> — skipped
+				<span className="font-medium">{content("question")}</span> — skipped
 			</div>
 		);
 	}
@@ -41,9 +42,6 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 	// arguments, so every existing transcript shows them too. The lean
 	// snapshot (what the model sees, compactAnswerForModel) is untouched;
 	// any parse failure or absent input renders exactly the older card.
-	const askInput = answer.kind === "ask" ? parseAskInput(input) : undefined;
-	const parsedDetails = askInput?.details ?? (answer.kind === "quiz" ? parseQuizInput(input)?.details : undefined);
-	const descByIndex = new Map((askInput?.options ?? []).map((o, i) => [i + 1, o.description]));
 
 	return (
 		<>
@@ -53,7 +51,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 		    ThinkingBlock, instead of an inset inside the answer. Same muted
 		    rail as before; the label is now plain "Your thinking". */}
 		{answer.readingThinking && (
-			<ThinkingBlock testId="reading-thinking-block" label="YOUR THINKING" text={answer.readingThinking} defaultOpen />
+			<ThinkingBlock testId="reading-thinking-block" label="YOUR THINKING" text={answer.readingThinking} contentSpan={spans.get("reading")} defaultOpen />
 		)}
 		{/* [&>*:last-child]:mb-0 (owner round, 2026-10-07): on ask cards the
 		    thinking row is the last child — its my-3 stacked with the card's
@@ -88,13 +86,13 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 					))}
 			</div>
 			<div className="mb-3 font-medium">
-				<ToolContentResponse>{answer.questionText}</ToolContentResponse>
+				{content("question")}
 			</div>
-			{parsedDetails && (
+			{spans.has("details") && (
 				// The details line, same paint as the pending dock (owner,
 				// 2026-10-12): full markdown, LaTeX included.
 				<div className="mb-3 text-sm text-muted-foreground">
-					<ToolContentResponse>{parsedDetails}</ToolContentResponse>
+					{content("details")}
 				</div>
 			)}
 
@@ -133,14 +131,12 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 									</span>
 								)}
 								<span className={cn(!sel && "text-muted-foreground")}>
-									<ToolContentResponse>{opt.label}</ToolContentResponse>
-									{descByIndex.get(opt.index) && (
+									{content(`option:${opt.index}`)}
+									{spans.has(`description:${opt.index}`) && (
 										// Ask-option subtext (owner, 2026-10-12): same markdown path
 										// as the pending dock — LaTeX included. Quiz options carry
 										// none (owner ruling 2026-09-26); the map stays empty for them.
-										<ToolContentResponse className="lh-prose block text-xs text-muted-foreground">
-											{descByIndex.get(opt.index)}
-										</ToolContentResponse>
+										content(`description:${opt.index}`, "lh-prose block text-xs text-muted-foreground")
 									)}
 								</span>
 							</div>
@@ -154,13 +150,13 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 							data-testid="answered-other"
 							className="flex items-center gap-2 rounded-lg border border-primary bg-accent px-3 py-1.5"
 						>
-							<span>“<PathText text={answer.other} />”</span>
+							<span>{content("other")}</span>
 						</div>
 					)}
 				</div>
 			)}
 
-			{answer.text && <div className="lh-prose mt-2 whitespace-pre-wrap">“<PathText text={answer.text} />”</div>}
+			{answer.text && <div className="lh-prose mt-2 whitespace-pre-wrap">{content("text")}</div>}
 
 			{/* The confidence record (owner round 6): the slider's rail, disc
 			    removed — the missing handle itself says "this is a record, not a
@@ -190,6 +186,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 					testId="your-thinking"
 					label="YOUR THINKING"
 					text={answer.thinking ?? answer.note ?? ""}
+					contentSpan={spans.get("thinking")}
 					inCard
 				/>
 			)}
@@ -215,7 +212,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 							<span className="font-medium text-muted-foreground">Why: </span>
 							{/* Keep the first paragraph beside the label, not every paragraph:
 							   later paragraphs must retain their recovered document structure. */}
-							<ToolContentResponse className="inline [&>p:first-child]:inline [&>p:first-child]:m-0">{answer.explanation}</ToolContentResponse>
+							{content("explanation", "inline [&>p:first-child]:inline [&>p:first-child]:m-0")}
 						</div>
 					)}
 				</div>
@@ -227,7 +224,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 			{isExplain && answer.committed && (
 				<div className="mt-3 rounded-lg bg-muted py-2 text-sm text-muted-foreground">
 					<span className="font-medium text-foreground">The answer: </span>
-					<ToolContentResponse className="inline [&>p:first-child]:inline [&>p:first-child]:m-0">{answer.committed}</ToolContentResponse>
+					{content("committed", "inline [&>p:first-child]:inline [&>p:first-child]:m-0")}
 				</div>
 			)}
 		</div>

@@ -258,6 +258,40 @@ class SessionsTest(unittest.TestCase):
             self.assertEqual("routine read result" in text, flags.get("include_operations", False))
             self.assertEqual("SIGNATURE" in text, flags.get("include_agent_thinking", False) and flags.get("include_operations", False))
 
+    def test_private_side_chats_are_omitted_with_all_formats_and_flags(self):
+        source = record(
+            [{"id": "lesson-message", "role": "user", "content": "PUBLIC LESSON CONTENT"}],
+            sideChats=[{
+                "id": "private-thread", "createdAt": "2026-10-10T10:30:00Z",
+                "messages": [
+                    {"id": "private-question", "role": "user", "text": "PRIVATE SIDE QUESTION",
+                     "at": "2026-10-10T10:30:00Z", "quotes": [{"text": "PRIVATE SIDE QUOTE",
+                     "source": {"kind": "message", "messageId": "lesson-message"}}]},
+                    {"id": "private-answer", "role": "assistant", "text": "PRIVATE SIDE ANSWER",
+                     "at": "2026-10-10T10:31:00Z"},
+                ],
+            }],
+        )
+        original = copy.deepcopy(source)
+        for include_operations in (False, True):
+            for include_agent_thinking in (False, True):
+                with self.subTest(include_operations=include_operations,
+                                  include_agent_thinking=include_agent_thinking):
+                    selected = sessions.selected_record(
+                        source, include_operations=include_operations,
+                        include_agent_thinking=include_agent_thinking,
+                    )
+                    self.assertNotIn("sideChats", selected["record"])
+                    self.assertEqual(
+                        [item["source"] for item in selected["omissions"] if item["source"] == "sideChats"],
+                        ["sideChats"],
+                    )
+                    for output in (json.dumps(selected), sessions.render_markdown(selected)):
+                        self.assertIn("PUBLIC LESSON CONTENT", output)
+                        for private in ("PRIVATE SIDE QUESTION", "PRIVATE SIDE ANSWER", "PRIVATE SIDE QUOTE"):
+                            self.assertNotIn(private, output)
+        self.assertEqual(source, original)
+
     def test_full_artifacts_refs_and_no_payload_embedding(self):
         brief = "FULL BRIEF START\n" + "long evidence paragraph.\n" * 800 + "FULL BRIEF END"
         messages = [

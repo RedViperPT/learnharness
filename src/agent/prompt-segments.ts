@@ -34,6 +34,17 @@ import { FRAGMENT_RE, isValidSegmentPath, type PromptAgent, type PromptSegmentIn
 
 const PROMPTS_DIR = path.join(PATHS.root, "src", "agent", "prompts");
 
+/** Read a required, code-owned source fragment. Unlike optional overrides,
+ * missing or unreadable sources must not silently weaken a prompt. */
+export function readPromptSource(segmentPath: string): string {
+	const file = path.join(PROMPTS_DIR, ...segmentPath.split("/"));
+	try {
+		return fs.readFileSync(file, "utf-8");
+	} catch (cause) {
+		throw new Error(`Could not read required prompt source: ${file}`, { cause });
+	}
+}
+
 /** Shared fragments the PRACTICE agent composes: the VOICE, ACCURACY,
  *  and MENTAL-MODEL chunks joined the formatting guide (owner rounds 13
  *  and the prompt-refinement round of 2026-10-07) — personality, the

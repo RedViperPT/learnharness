@@ -111,6 +111,8 @@ automatic size cap or summary replacing the learner's words.
 The default includes teacher/learner prose, questions and options, learner answers,
 confidence and both learner-thinking channels, practice submissions, stored answer
 keys and solutions, textual research/PDF briefs, and compact plan/context material.
+Private side-question threads are excluded from both the default and diagnostic
+session reads.
 
 **This is an archival view, not a replay of what the learner has seen.** Stored
 correct answers and model solutions are included even for pending questions;

@@ -3,6 +3,8 @@
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 import type { ArtifactPartProps } from "@/src/core";
+import { markdownSpan } from "@/src/core";
+import { SideContent } from "@/components/side-content";
 
 /**
  * The practice transcript cards (practice sessions, owner design
@@ -66,7 +68,7 @@ export function ProblemCard({ part }: ArtifactPartProps) {
 		<div data-testid="problem-card" className="lh-card-enter my-1 rounded-xl border bg-card p-4">
 			<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Problem</div>
 			<div className="lh-prose text-[15px]">
-				<ToolContentResponse>{statement}</ToolContentResponse>
+				<SideContent span={markdownSpan("statement", statement)} />
 			</div>
 		</div>
 	);

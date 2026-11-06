@@ -28,13 +28,13 @@ import {
   useMemo,
   useState,
 } from "react";
-import remarkBreaks from "remark-breaks";
 import {
   Streamdown,
+  defaultRemarkPlugins,
   type PluginConfig,
 } from "streamdown";
 import { mdComponents } from "@/components/md-blocks";
-import { repairMathForDisplay, transformMathDelimiters } from "@/src/core";
+import { repairMathForDisplay, transformMathDelimiters, presentationRemarkPlugins } from "@/src/core";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: LhViewMessage["role"];
@@ -336,21 +336,16 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 // compatibility reader for old \(...\)/\[...\] content; its two-dollar
 // output remains valid alongside native single-dollar math.
 //
-// remark-breaks rides in the cjk plugin's remarkPluginsAfter slot (public
-// PluginConfig API): Streamdown's bare `remarkPlugins` PROP would REPLACE the
-// defaults ([remark-gfm, codeMeta]), silently dropping GFM and code-fence
-// metastring parsing. The slot appends after the defaults, which is the
-// standard remark-gfm → remark-breaks order.
+// The rendering-owned grammar is used on every Markdown surface.
+// Explicit remarkPlugins replace Streamdown defaults, so retain codeMeta
+// alongside the shared GFM/math/breaks plugins (including fence metadata).
 //
 // MERMAID is app-owned since the chrome-melt wave (2026-09-19): the md-blocks
 // `code` override intercepts mermaid fences and renders via
 // components/mermaid-render.ts — streamdown's internal mermaid machinery
 // (the plugin entry + the `mermaid` prop) is retired with it.
 export const streamdownPlugins = {
-  cjk: {
-    ...cjk,
-    remarkPluginsAfter: [...cjk.remarkPluginsAfter, remarkBreaks],
-  },
+  cjk,
   code,
   math: createMathPlugin({ singleDollarTextMath: true }),
 } as unknown as PluginConfig;
@@ -381,6 +376,7 @@ export const MessageResponse = memo(
         )}
         components={mdComponents}
         plugins={streamdownPlugins}
+        remarkPlugins={[defaultRemarkPlugins.codeMeta, ...presentationRemarkPlugins] as ComponentProps<typeof Streamdown>["remarkPlugins"]}
         remend={streamdownRemend}
         {...props}
       >

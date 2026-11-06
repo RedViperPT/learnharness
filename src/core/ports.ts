@@ -26,6 +26,7 @@ import type {
 	SessionCheckpoint,
 	TurnUsage,
 	NotesSource,
+	SideChatThread,
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
 
@@ -52,6 +53,8 @@ export interface ChatStore {
 	 * a turn persisted twice appends once while continuation turns (which
 	 * share a response message id) each keep their usage. */
 	appendTurnUsage(id: string, entry: TurnUsage): void;
+	/** Per-field synchronous side-chat update; does not affect updatedAt/messages. */
+	updateSideChats(id: string, update: (threads: SideChatThread[]) => SideChatThread[]): SideChatThread[] | null;
 	/** Append one extraction-run usage entry — idempotent per startedAt. */
 	appendExtractionUsage(id: string, entry: ExtractionRunUsage): void;
 	/** Persist the per-chat model/thinking settings (the model control).

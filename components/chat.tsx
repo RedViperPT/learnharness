@@ -42,6 +42,7 @@ import {
 	cliContextWindowOf,
 	messageAnchorId,
 	textPartMessageId,
+	QUESTION_TOOLS,
 	kbdEventForAction as kbdEventForChat,
 	type ChatInput,
 	type ChatSettings,
@@ -86,6 +87,11 @@ import {
 } from "@/src/core";
 import { ReadingThinkingField } from "@/components/reading-thinking";
 import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/thinking-block";
+import { SideChatProvider, useSideChatStore } from "@/components/side-chat-state";
+import { SideChatPanel } from "@/components/side-chat-panel";
+import { SideSelectionAsk, SideSource } from "@/components/side-selection";
+import { SideContent } from "@/components/side-content";
+import { markdownSpan } from "@/src/core";
 
 /** One width for everything: transcript, cards, and the bottom blob share this column. */
 /**
@@ -203,6 +209,22 @@ function isSubagentSteer(m: LhViewMessage): boolean {
 	return (m.metadata as { subagentResult?: unknown } | undefined)?.subagentResult != null;
 }
 
+/** Live native ids can already look permanent. Only canonical record
+ * snapshots establish that a passage is saved and safe to quote. */
+function savedSideSourceIds(messages: readonly LhMessage[]): ReadonlySet<string> {
+	const sources = new Set<string>();
+	for (const message of messages) {
+		if (message.role === "assistant" && !["pending", "error", "aborted"].includes((message as { stopReason?: string }).stopReason ?? "")) sources.add(message.id);
+		if (message.role === "toolResult") {
+			const result = message as { isError?: boolean; toolCallId: string; toolName: string };
+			if (result.isError) continue;
+			if ((QUESTION_TOOLS as readonly string[]).includes(result.toolName)) sources.add(`question:${result.toolCallId}`);
+			if (result.toolName === "problem") sources.add(`problem:${result.toolCallId}`);
+		}
+	}
+	return sources;
+}
+
 /**
  * The teaching session. All chat state lives in useChat; the server persists
  * the canonical transcript after every turn.
@@ -212,7 +234,15 @@ function isSubagentSteer(m: LhViewMessage): boolean {
  * never overlapping the transcript at rest, never covering the scrollbar —
  * and DockOverlay animates its height on variant changes.
  */
-export function Chat({
+export function Chat(props: React.ComponentProps<typeof ChatInner>) {
+	return (
+		<SideChatProvider chatId={props.chatId}>
+			<ChatInner {...props} />
+		</SideChatProvider>
+	);
+}
+
+function ChatInner({
 	chatId,
 	title,
 	initialMessages,
@@ -246,6 +276,7 @@ export function Chat({
 	 *  only decides whether the pill rides the composer. */
 	initialConfigured?: boolean;
 }) {
+	const sideChat = useSideChatStore();
 	// Reattach plumbing (background-turn runner wave): the hook holds the
 	// settled terminal's callback — a stable ref assigned below, once
 	// syncFromServer exists (refs, not closures: no stale capture).
@@ -263,6 +294,7 @@ export function Chat({
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
 	const sourceTextParts = useMemo(() => firstSourceTextParts(messages), [messages]);
+	const [savedSourceIds, setSavedSourceIds] = useState(() => savedSideSourceIds(initialMessages));
 
 	// The reattach settled terminal → the sync-and-continue seam (below).
 	setReattachSettled(() => reattachSettledRef.current());
@@ -382,6 +414,7 @@ export function Chat({
 				mermaidFocus: mermaidFocusRef.current !== null || figureFocusRef.current !== null,
 				planOpen: planOpenRef.current,
 				setupOpen: setupOpenRef.current,
+				sidePanelOpen: sideChat?.getSnapshot().panelOpen,
 				pending: pendingRef.current !== null,
 				problem: activeProblemRef.current !== null,
 				busy: busyRef.current,
@@ -391,6 +424,7 @@ export function Chat({
 			else if (target === "turn") setAbortAsk("turn");
 			else if (target === "mermaid") setMermaidFocus(null);
 			else if (target === "plan") setPlanOpen(false);
+			else if (target === "side") sideChat?.setOpen(false);
 			// setup closes itself; null = nothing to do — both claimed.
 		};
 		window.addEventListener("lh:kbd-abort-turn", onAbort);
@@ -670,7 +704,10 @@ export function Chat({
 			const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}`);
 			if (!cancelled && res.ok) {
 				const record = (await res.json().catch(() => null)) as { messages?: LhMessage[] } | null;
-				if (Array.isArray(record?.messages)) setMessages(record.messages);
+				if (Array.isArray(record?.messages)) {
+					setSavedSourceIds(savedSideSourceIds(record.messages));
+					setMessages(record.messages);
+				}
 			}
 			if (cancelled) return;
 			if (draftRef.current !== null) {
@@ -793,6 +830,7 @@ export function Chat({
 		if (Array.isArray(record.turns)) setTurns(record.turns);
 		setPricing(record.pricing);
 		if (!Array.isArray(record.messages)) return;
+		setSavedSourceIds(savedSideSourceIds(record.messages));
 		setMessages(record.messages, record.turnError);
 		// The continuation seam (contracts.ts protocol §4): a job result
 		// landing in the record leaves the agent owing a continuation — the
@@ -830,6 +868,7 @@ export function Chat({
 			if (!res.ok) return;
 			const record = (await res.json()) as { messages?: LhMessage[] };
 			if (!Array.isArray(record.messages)) return;
+			setSavedSourceIds(savedSideSourceIds(record.messages));
 			adoptRecord(record.messages);
 		} catch {
 			/* transient — the idle full sync is the net */
@@ -1198,6 +1237,12 @@ export function Chat({
 		if (localStreamRef.current || turnInFlightRef.current) return;
 		void syncFromServer();
 	});
+	useServerEvent("side-chats-changed", (p) => {
+		// Side work changes money, not lesson history. A full record sync
+		// would also run the teacher's owed-continuation gate; side answers
+		// must never be a reason to wake or replace the original lesson.
+		if (p.chatId === chatId) void syncTurns();
+	});
 
 	const onSend = () => {
 		if (pending || compacting) return;
@@ -1277,8 +1322,7 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div className="flex h-dvh">
-			<div className="flex min-w-0 flex-1 flex-col">
+		<div className="relative flex h-dvh min-w-0 flex-col" data-session-shell="">
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
 				    bottom outline (border-b border-border) matches the one that
@@ -1380,6 +1424,8 @@ export function Chat({
 				    practice never extracts, so an ever-filling ring with no
 				    run behind it would lie. */}
 					{kind !== "practice" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
+					<Button type="button" size="sm" variant="outline" data-testid="open-side-chat"
+						title="Ask a private side question" onClick={() => sideChat?.openNew()}>Ask</Button>
 					{/* Practice sessions: no phase arc — a quiet Practice tag
 					    instead of the phase chip. */}
 					{kind === "practice" ? (
@@ -1397,8 +1443,11 @@ export function Chat({
 					)}
 				</TopBar>
 
+			<div className="relative flex min-h-0 flex-1">
+			<div className="flex min-w-0 flex-1 flex-col">
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
 				<div ref={sessionFindScopeRef} className="relative flex min-h-0 flex-1">
+				<SideSelectionAsk scopeRef={sessionFindScopeRef} />
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<ConversationContent className="min-h-full gap-0 p-0">
@@ -1559,7 +1608,11 @@ export function Chat({
 														const anchor = sourceId && sourceTextParts.get(sourceId) === part.id ? messageAnchorId(sourceId) : undefined;
 														return (
 															<div key={part.id || pi} id={anchor} data-source-message-id={sourceId ?? undefined} className="lh-source-passage">
-																<MessageResponse>{part.text}</MessageResponse>
+																{sourceId && savedSourceIds.has(sourceId) ? (
+																	<SideSource source={{ kind: "message", messageId: sourceId }}>
+																						<SideContent span={markdownSpan(part.id || "text", part.text ?? "", false)} />
+																	</SideSource>
+																) : <MessageResponse>{part.text}</MessageResponse>}
 															</div>
 														);
 													}
@@ -1600,7 +1653,11 @@ export function Chat({
 														// transcript; answered ones render as graded records.
 														if (part.state === "output-available") {
 															return (
-																<AnsweredCard key={pi} answer={part.output as QuestionAnswerData} input={part.input} />
+																part.toolCallId ? (
+																	<SideSource key={pi} source={{ kind: "question", toolCallId: part.toolCallId }} enabled={savedSourceIds.has(`question:${part.toolCallId}`)}>
+																		<AnsweredCard answer={part.output as QuestionAnswerData} input={part.input} />
+																	</SideSource>
+																) : <AnsweredCard key={pi} answer={part.output as QuestionAnswerData} input={part.input} />
 															);
 														}
 														return null;
@@ -1619,7 +1676,12 @@ export function Chat({
 														// registry — add renderers there, not here.
 														if (part.type.startsWith("tool-")) {
 															const Renderer = artifactRenderers[part.type.slice("tool-".length)];
-															if (Renderer) return <Renderer key={pi} part={part as ArtifactPartProps["part"]} />;
+															if (Renderer) {
+																const card = <Renderer key={pi} part={part as ArtifactPartProps["part"]} />;
+																return part.type === "tool-problem" && part.state === "output-available" && part.toolCallId
+																	? <SideSource key={pi} source={{ kind: "problem", toolCallId: part.toolCallId }} enabled={savedSourceIds.has(`problem:${part.toolCallId}`)}>{card}</SideSource>
+																	: card;
+															}
 														}
 														return null;
 													}
@@ -1775,6 +1837,9 @@ export function Chat({
 					}}
 				/>
 				</Conversation>
+				</div>
+			</div>
+			<SideChatPanel chatId={chatId} obscured={planOpen || mermaidFocus !== null || figureFocus !== null || setupOpen || abortAsk !== null} />
 
 				{/* The session-scoped focuses (chrome-melt wave, 2026-09-19): mounted
 				    INSIDE the session area — absolute inset-0 siblings of the scroller,
@@ -1792,7 +1857,6 @@ export function Chat({
 				)}
 				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)} />}
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
-				</div>
 			</div>
 		</div>
 		</JobsContext.Provider>
@@ -1855,7 +1919,7 @@ export function Chat({
  *  then the session overlays (mermaid paints above plan — later in DOM),
  *  then setup (self-closing — the gate only must not fire), then the
  *  2026-10-02 abort chain proper (question before turn). */
-export type EscAbortTarget = "mermaid" | "plan" | "setup" | "question" | "problem" | "turn" | null;
+export type EscAbortTarget = "mermaid" | "plan" | "setup" | "side" | "question" | "problem" | "turn" | null;
 	/**
  * Does the opening topic still owe its first send? The topic is the
  * server's ?prompt= or the sessionStorage stash. The gate is "no real
@@ -1875,6 +1939,7 @@ export function escAbortTarget(s: {
 	mermaidFocus: boolean;
 	planOpen: boolean;
 	setupOpen: boolean;
+	sidePanelOpen?: boolean;
 	pending: boolean;
 	/** An active practice problem (practice sessions, 2026-10-04): Esc
 	 *  opens the discard confirm — below a pending question (the two
@@ -1888,6 +1953,7 @@ export function escAbortTarget(s: {
 	if (s.mermaidFocus) return "mermaid";
 	if (s.planOpen) return "plan";
 	if (s.setupOpen) return "setup";
+	if (s.sidePanelOpen) return "side";
 	if (s.pending) return "question";
 	if (s.problem) return "problem";
 	if (s.busy) return "turn";

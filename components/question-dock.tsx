@@ -39,6 +39,9 @@ import {
 	type Phase3,
 } from "@/src/core";
 import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-rail";
+import { SideSource } from "@/components/side-selection";
+import { SideContent } from "@/components/side-content";
+import { questionContent } from "@/src/core";
 
 /**
  * The question dock — a pending quiz/ask REPLACES the chat composer: the
@@ -264,6 +267,7 @@ function QuestionDockForm({
 	compactionRunning = false,
 }: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal">) {
 	const kind = toolQuestionKind(toolName);
+	const spans = questionContent(input.question, input.details);
 
 	// Canonical QuestionData, built once per question. Quiz options are
 	// deterministically shuffled (seeded by toolCallId) so position never leaks
@@ -577,14 +581,16 @@ function QuestionDockForm({
 											: "Question"}
 					{qd.mode === "multi-select" && " · select all that apply"}
 				</div>
-				<div className="mb-3 font-medium">
-					<ToolContentResponse>{qd.question}</ToolContentResponse>
-				</div>
-				{qd.context && (
-					<div className="mb-3 text-sm text-muted-foreground">
-						<ToolContentResponse>{qd.context}</ToolContentResponse>
+				<SideSource source={{ kind: "question", toolCallId }}>
+					<div className="mb-3 font-medium">
+						<SideContent span={spans[0]!} />
 					</div>
-				)}
+					{qd.context && (
+						<div className="mb-3 text-sm text-muted-foreground">
+							<SideContent span={spans[1]!} />
+						</div>
+					)}
+				</SideSource>
 
 				{qd.mode !== "text" && (
 					<div className="flex flex-col gap-2 pb-2" role={qd.mode === "multi-select" ? "group" : "radiogroup"}>

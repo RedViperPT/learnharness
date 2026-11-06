@@ -8,6 +8,9 @@ import { joinDictation, useDictationTarget } from "@/components/dictation";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
 import { cn } from "@/lib/utils";
+import { SideSource } from "@/components/side-selection";
+import { SideContent } from "@/components/side-content";
+import { markdownSpan } from "@/src/core";
 
 /**
  * The practice dock (practice sessions, owner design 2026-10-04): an
@@ -108,9 +111,13 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 			    (--dock-max-h; the old fixed 40vh cut long problems short). */}
 			<div data-dock-scroll-area="" className="max-h-[var(--dock-max-h,40vh)] overflow-y-auto px-4 pt-3 pb-2">
 				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Problem</div>
-				<div className="lh-prose text-[15px]">
-					<ToolContentResponse>{input.statement}</ToolContentResponse>
-				</div>
+				<SideSource source={{ kind: "problem", toolCallId: problemCallId }}>
+					<div className="lh-prose text-[15px]">
+						{typeof input.statement === "string"
+							? <SideContent span={markdownSpan("statement", input.statement)} />
+							: <ToolContentResponse>{input.statement}</ToolContentResponse>}
+					</div>
+				</SideSource>
 			</div>
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);

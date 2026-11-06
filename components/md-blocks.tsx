@@ -42,6 +42,7 @@ import { MermaidError } from "@/components/mermaid-error";
 import { blurAfterPointerClick } from "@/components/focus-hygiene";
 import { chartSize, useSessionMermaid } from "@/components/session-overlay";
 import { Hint } from "@/components/ui/hint";
+import { presentationAlertMarker } from "@/src/core";
 
 // ─── The one affordance: the hover-reveal corner copy ────────────────────────
 
@@ -278,7 +279,7 @@ export function MarkdownCode(props: ComponentProps<"code"> & ExtraProps) {
  *  boxes them identically — a stray [!NOTE] still meant "this deserves
  *  emphasis", and a literal marker line must never leak as text (owner
  *  design, callout round 2026-10-07). */
-const ALERT_MARKER_RE = /^\[!(note|tip|important|warning|caution)\][ \t]*(?:\n|$)/i;
+const ALERT_MARKER_RE = presentationAlertMarker;
 
 export interface ParsedAlert {
 	kind: string;

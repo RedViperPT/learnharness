@@ -1,6 +1,7 @@
 import type { Agent, AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import { ToolCallIdUniquifier } from "./call-ids.ts";
 import type { ChatGPTRequestCycle } from "../../agent/chatgpt-request-cycle.ts";
+import { createLatestValueCoalescer } from "../latest-value-coalescer.ts";
 
 /**
  * THE NATIVE WIRE (Wave D, owner-approved 2026-09-26): one agent turn, streamed
@@ -121,7 +122,7 @@ export interface PiTurnHandle {
 }
 
 export function runPiTurn(spec: PiTurnSpec): PiTurnHandle {
-	const { agent, onError, onFinish, onSettleError, onSettleFailure, usedToolCallIds, updateFlushMs = 100, requestCycle } = spec;
+	const { agent, onError, onFinish, onSettleError, onSettleFailure, usedToolCallIds, updateFlushMs, requestCycle } = spec;
 	const uniquifier = usedToolCallIds ? new ToolCallIdUniquifier(usedToolCallIds) : undefined;
 
 	let settled = false;
@@ -143,11 +144,13 @@ export function runPiTurn(spec: PiTurnSpec): PiTurnHandle {
 	// tool executions each own theirs (toolCallId). End events free the slot
 	// — a later update for the same key starts a fresh run.
 	const updateSlots = new Map<string, number>();
+	const subscribers = new Set<PiTurnSubscriber>();
 	// The coalescing queue for LIVE fan-out: key → latest event, flushed at
 	// most once per flush window (Map preserves first-insertion order, so the
 	// relative order of concurrent keys stays chronological).
-	const pending = new Map<string, TurnWireEvent>();
-	const subscribers = new Set<PiTurnSubscriber>();
+	const updates = createLatestValueCoalescer<TurnWireEvent>((batch) => {
+		for (const sub of subscribers) for (const event of batch) sub.push(event);
+	}, updateFlushMs);
 
 	const coalesceKey = (event: TurnWireEvent): string | null => {
 		if (event.type === "message_update") return "message";
@@ -170,8 +173,7 @@ export function runPiTurn(spec: PiTurnSpec): PiTurnHandle {
 				log.push(event);
 			}
 			// Fan-out: coalesced — latest wins, flushed at ≤1/window.
-			pending.set(key, event);
-			armFlush();
+			updates.queue(key, event);
 			return;
 		}
 		// A boundary event ends its update run (end supersedes the partial;
@@ -180,35 +182,15 @@ export function runPiTurn(spec: PiTurnSpec): PiTurnHandle {
 		if (event.type === "tool_execution_end") updateSlots.delete(`tool:${event.toolCallId}`);
 		// Strict per-subscriber ordering: anything still pending precedes
 		// this boundary event on the wire, never after it.
-		flushPending();
+		updates.flush();
 		log.push(event);
 		for (const sub of subscribers) sub.push(event);
 	};
 
-	let flushTimer: ReturnType<typeof setTimeout> | undefined;
-	const flushPending = () => {
-		if (flushTimer !== undefined) {
-			clearTimeout(flushTimer);
-			flushTimer = undefined;
-		}
-		if (pending.size === 0) return;
-		const batch = [...pending.values()];
-		pending.clear();
-		for (const sub of subscribers) for (const event of batch) sub.push(event);
-	};
-	const armFlush = () => {
-		if (flushTimer !== undefined) return;
-		flushTimer = setTimeout(() => {
-			flushTimer = undefined;
-			flushPending();
-		}, updateFlushMs);
-		// Never holds the process (or the test runner) open for a straggler.
-		(flushTimer as { unref?: () => void }).unref?.();
-	};
 	const closeAll = () => {
 		if (settled) return;
 		// Order to the very end: the last pending snapshot precedes [DONE].
-		flushPending();
+		updates.flush();
 		settled = true;
 		for (const sub of subscribers) sub.done();
 		subscribers.clear();
